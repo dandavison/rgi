@@ -207,9 +207,16 @@ class RgiSession:
 
         try:
             # Use bash to run the command to handle the complex shell scripts in bindings
+            # Pipe empty string to fzf to trigger initial display
             env = os.environ.copy()
-            result = subprocess.run(fzf_cmd, env=env)
-            return result.returncode
+            process = subprocess.Popen(
+                fzf_cmd, 
+                stdin=subprocess.PIPE, 
+                env=env
+            )
+            # Send empty input to trigger initial display
+            process.communicate(input=b"")
+            return process.returncode
         except KeyboardInterrupt:
             return 130
         except Exception as e:
