@@ -10,9 +10,8 @@ from pathlib import Path
 
 def main():
     """Main entry point for rgi command."""
-    # Get the path to the shell script in the package
-    script_dir = Path(__file__).parent / "scripts"
-    rgi_script = script_dir / "rgi"
+    # Get the path to the bundled shell script
+    rgi_script = Path(__file__).parent / "scripts" / "rgi"
     
     if not rgi_script.exists():
         print(f"Error: rgi script not found at {rgi_script}", file=sys.stderr)

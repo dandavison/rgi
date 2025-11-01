@@ -23,7 +23,7 @@ TEST_FIXTURE_DIR="$(pwd)/test-fixture-$$"
 # Get absolute path to rgi and script directory
 SCRIPT_REALPATH="$(realpath "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_REALPATH")"
-RGI_PATH="$(realpath "$SCRIPT_DIR/../../rgi")"
+RGI_PATH="$(realpath "$SCRIPT_DIR/../../src/rgi/scripts/rgi")"
 echo "Setting up test fixtures in $TEST_FIXTURE_DIR..."
 echo "Using rgi at: $RGI_PATH"
 bash "$SCRIPT_DIR/../fixtures/setup_fixtures.sh" "$TEST_FIXTURE_DIR"
