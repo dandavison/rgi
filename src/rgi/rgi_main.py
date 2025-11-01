@@ -6,6 +6,7 @@ Clean architecture: Python manages fzf sessions and handles all searches.
 No shell scripts needed!
 """
 
+import json
 import os
 import re
 import shlex
@@ -55,13 +56,18 @@ class RgiSession:
     def __init__(
         self,
         initial_pattern: str = "",
-        initial_paths: List[str] = None,
-        initial_options: List[str] = None,
+        initial_paths: Optional[List[str]] = None,
+        initial_options: Optional[List[str]] = None,
     ):
         self.pattern = initial_pattern
         self.paths = initial_paths or ["."]
         self.options = initial_options or []
         self.mode = "pattern"  # "pattern" or "command"
+
+        # AI search state
+        self.ai_commands = []  # List of AI-generated rg commands
+        self.ai_command_index = -1  # Current AI command index (-1 = not using AI)
+        self.ai_prompt = ""  # The original AI prompt
 
         # Get the path to the Python script for callbacks
         self.script_path = sys.argv[0]
@@ -126,10 +132,21 @@ class RgiSession:
             elif result.key == "tab":
                 # Switch modes
                 if self.mode == "pattern":
-                    # Save the current query as pattern and switch to command mode
-                    if result.query:
-                        self.pattern = result.query
-                    self.mode = "command"
+                    # Check if this is an AI prompt
+                    if result.query.startswith("??"):
+                        # Generate AI commands
+                        prompt = result.query[2:].strip()
+                        if prompt:
+                            self._generate_ai_commands(prompt)
+                            if self.ai_commands:
+                                # Switch to command mode with first AI command
+                                self.ai_command_index = 0
+                                self.mode = "command"
+                    else:
+                        # Regular mode switch
+                        if result.query:
+                            self.pattern = result.query
+                        self.mode = "command"
                 else:
                     # Parse the command and switch back to pattern mode
                     command = result.query
@@ -143,7 +160,27 @@ class RgiSession:
                     if new_paths:
                         self.paths = new_paths
 
+                    # Clear AI state when switching back
+                    self.ai_commands = []
+                    self.ai_command_index = -1
+                    self.ai_prompt = ""
+
                     self.mode = "pattern"
+
+            elif result.key == "up":
+                # Cycle to previous AI command if available
+                if self.ai_commands and self.ai_command_index > 0:
+                    self.ai_command_index -= 1
+                    # Stay in command mode to show the new command
+
+            elif result.key == "down":
+                # Cycle to next AI command if available
+                if (
+                    self.ai_commands
+                    and self.ai_command_index < len(self.ai_commands) - 1
+                ):
+                    self.ai_command_index += 1
+                    # Stay in command mode to show the new command
 
             else:
                 # Unexpected key
@@ -160,6 +197,8 @@ class RgiSession:
         rg_base = self._build_rg_command()
         paths_str = " ".join(self.paths)
         header = f"Pattern Mode | {rg_base} {{q}} {paths_str}"
+        if self.pattern.startswith("??"):
+            header = "AI Search Mode | Type your search description and press Tab"
 
         # Build fzf command
         cmd = [
@@ -176,7 +215,7 @@ class RgiSession:
             "--delimiter",
             ":",
             "--expect",
-            "tab,enter,esc,ctrl-c",
+            "tab,enter,esc,ctrl-c,up,down",
             "--print-query",
             "--query",
             self.pattern,
@@ -205,11 +244,18 @@ class RgiSession:
 
     def _run_command_mode(self) -> Optional[FzfResult]:
         """Run fzf in command mode."""
-        # Build the initial command
-        rg_base = self._build_rg_command()
-        paths_str = " ".join(shlex.quote(p) for p in self.paths)
-        pattern_quoted = shlex.quote(self.pattern) if self.pattern else '""'
-        initial_command = f"{rg_base} --json {pattern_quoted} {paths_str}"
+        # Determine the initial command
+        if self.ai_commands and 0 <= self.ai_command_index < len(self.ai_commands):
+            # Use the current AI command
+            initial_command = self.ai_commands[self.ai_command_index]
+            header = f"AI Command {self.ai_command_index + 1}/{len(self.ai_commands)} | '{self.ai_prompt}' | ↑↓ to cycle"
+        else:
+            # Build normal command
+            rg_base = self._build_rg_command()
+            paths_str = " ".join(shlex.quote(p) for p in self.paths)
+            pattern_quoted = shlex.quote(self.pattern) if self.pattern else '""'
+            initial_command = f"{rg_base} --json {pattern_quoted} {paths_str}"
+            header = "Command Mode | Edit the rg command directly"
 
         # Build the reload command - evaluate the command in {q}
         reload_cmd = "eval {q} 2>/dev/null | delta --light --grep-output-type classic"
@@ -229,7 +275,7 @@ class RgiSession:
             "--delimiter",
             ":",
             "--expect",
-            "tab,enter,esc,ctrl-c",
+            "tab,enter,esc,ctrl-c,up,down",
             "--print-query",
             "--query",
             initial_command,
@@ -239,7 +285,7 @@ class RgiSession:
             "--bind",
             f"start:reload:{reload_cmd}",
             "--header",
-            "Command Mode | Edit the rg command directly",
+            header,
             "--preview",
             f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
             "--preview-window",
@@ -343,6 +389,58 @@ class RgiSession:
 
         return pattern, options, paths
 
+    def _generate_ai_commands(self, prompt: str):
+        """Generate AI search commands using LLM."""
+        self.ai_prompt = prompt
+        self.ai_commands = []
+
+        # Build the LLM prompt
+        llm_prompt = f"""Given this search request: "{prompt}"
+
+Generate a JSON array of rg (ripgrep) commands that would help find what the user is looking for.
+Each command should be a complete rg invocation with appropriate flags.
+Focus on being comprehensive - provide multiple search strategies.
+
+Output ONLY a JSON array of command strings, like:
+["rg --follow -i 'pattern1'", "rg --type python 'pattern2'", "rg -g '*.js' 'pattern3'"]
+"""
+
+        # Try claude first, then cursor
+        llm_commands = [["claude", "code", "--print"], ["cursor", "agent", "--print"]]
+
+        for llm_cmd in llm_commands:
+            try:
+                result = subprocess.run(
+                    llm_cmd,
+                    input=llm_prompt,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+
+                if result.returncode == 0 and result.stdout.strip():
+                    # Parse the JSON response
+                    try:
+                        commands = json.loads(result.stdout.strip())
+                        if isinstance(commands, list) and commands:
+                            self.ai_commands = commands
+                            print(
+                                f"Generated {len(commands)} AI search commands",
+                                file=sys.stderr,
+                            )
+                            return
+                    except json.JSONDecodeError:
+                        print("Failed to parse LLM response as JSON", file=sys.stderr)
+                        continue
+            except (
+                subprocess.CalledProcessError,
+                FileNotFoundError,
+                subprocess.TimeoutExpired,
+            ):
+                continue
+
+        print("Failed to generate AI commands - LLM not available", file=sys.stderr)
+
     def _open_file(self, file_path: str, line_number: int):
         """Open a file at the specified line using wormhole or $EDITOR."""
         # Try wormhole first
@@ -364,6 +462,11 @@ class RgiSession:
 
 def internal_search(pattern: str, paths: List[str], options: List[str]):
     """Execute an rg search and output results formatted for fzf."""
+    # Handle AI mode - don't search when pattern starts with ??
+    if pattern.startswith("??"):
+        print("Type your search description and press Tab to generate AI commands")
+        return
+
     # Build the rg command
     cmd_parts = ["rg", "--follow", "-i", "--hidden", "-g", "!.git/*"]
     cmd_parts.extend(options)
@@ -386,7 +489,8 @@ def internal_search(pattern: str, paths: List[str], options: List[str]):
         text=True,
     )
 
-    rg_proc.stdout.close()
+    if rg_proc.stdout:
+        rg_proc.stdout.close()
     output, _ = delta_proc.communicate()
 
     # Output the results
