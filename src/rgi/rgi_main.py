@@ -3,14 +3,12 @@
 Main implementation of rgi - Interactive ripgrep with fzf.
 """
 
-import json
 import os
 import shlex
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import typer
 
@@ -39,12 +37,12 @@ class RgiSession:
         # Find rgi-preview script
         module_dir = Path(__file__).parent
         scripts_dir = module_dir / "scripts"
-        
+
         if scripts_dir.exists():
             self.rgi_preview = scripts_dir / "rgi-preview"
         else:
             self.rgi_preview = module_dir / "rgi-preview"
-        
+
         if not self.rgi_preview.exists():
             # Fall back to looking for it on PATH
             self.rgi_preview = "rgi-preview"
@@ -67,16 +65,25 @@ class RgiSession:
         # Base fzf command
         fzf_cmd = [
             "fzf",
-            "--layout", "reverse",
-            "--info", "hidden",
-            "--prompt", " ",
-            "--color", "light",
+            "--layout",
+            "reverse",
+            "--info",
+            "hidden",
+            "--prompt",
+            " ",
+            "--color",
+            "light",
             "--ansi",
-            "--bind", "ctrl-k:kill-line",
-            "--bind", "alt-right:forward-word",
-            "--bind", "alt-left:backward-word",
-            "--preview-window", "up,70%",
-            "-d", ":",
+            "--bind",
+            "ctrl-k:kill-line",
+            "--bind",
+            "alt-right:forward-word",
+            "--bind",
+            "alt-left:backward-word",
+            "--preview-window",
+            "up,70%",
+            "-d",
+            ":",
         ]
 
         if self.command_mode:
@@ -88,7 +95,9 @@ class RgiSession:
 
         return fzf_cmd
 
-    def _build_command_mode_bindings(self, rg_base: str, paths_str: str, delta: str) -> List[str]:
+    def _build_command_mode_bindings(
+        self, rg_base: str, paths_str: str, delta: str
+    ) -> List[str]:
         """Build fzf bindings for command mode."""
         # Initial command to display
         pattern_quoted = shlex.quote(self.pattern) if self.pattern else '""'
@@ -98,39 +107,57 @@ class RgiSession:
         tab_script = self._create_command_to_pattern_script()
 
         return [
-            "--query", full_command + " ",
+            "--query",
+            full_command + " ",
             "--phony",
-            "--bind", f"start:reload:{rg_base} --json {pattern_quoted} {paths_str} 2>/dev/null | {delta}",
-            "--bind", "start:backward-delete-char",
-            "--bind", f"change:reload:eval {{q}} 2>/dev/null | {delta}",
-            "--bind", f"tab:execute:{tab_script}",
-            "--bind", "enter:execute:wormhole {1}:{2}",
-            "--preview", f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
+            "--bind",
+            f"start:reload:{rg_base} --json {pattern_quoted} {paths_str} 2>/dev/null | {delta}",
+            "--bind",
+            "start:backward-delete-char",
+            "--bind",
+            f"change:reload:eval {{q}} 2>/dev/null | {delta}",
+            "--bind",
+            f"tab:execute:{tab_script}",
+            "--bind",
+            "enter:execute:wormhole {1}:{2}",
+            "--preview",
+            f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
         ]
 
-    def _build_pattern_mode_bindings(self, rg_base: str, paths_str: str, delta: str) -> List[str]:
+    def _build_pattern_mode_bindings(
+        self, rg_base: str, paths_str: str, delta: str
+    ) -> List[str]:
         """Build fzf bindings for pattern mode."""
         pattern_quoted = shlex.quote(self.pattern) if self.pattern else '""'
-        
+
         # Build the options string for passing to command mode
         opts_str = " ".join(shlex.quote(opt) for opt in self.options)
 
         return [
-            "--query", self.pattern + " " if self.pattern else "",
+            "--query",
+            self.pattern + " " if self.pattern else "",
             "--phony",
-            "--bind", f"start:reload:{rg_base} --json {pattern_quoted} {paths_str} 2>/dev/null | {delta}",
-            "--bind", "start:backward-delete-char" if self.pattern else "start:reload:echo",
-            "--bind", f"change:reload:{rg_base} --json {{q}} {paths_str} 2>/dev/null | {delta}",
-            "--bind", f'tab:execute:kill -TERM $PPID 2>/dev/null; "{self.script_path}" --rgi-command-mode {opts_str} "{{q}}" {paths_str}',
-            "--bind", "enter:execute:wormhole {1}:{2}",
-            "--header", f"{rg_base} {{q}} {paths_str}",
-            "--preview", f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
+            "--bind",
+            f"start:reload:{rg_base} --json {pattern_quoted} {paths_str} 2>/dev/null | {delta}",
+            "--bind",
+            "start:backward-delete-char" if self.pattern else "start:reload:echo",
+            "--bind",
+            f"change:reload:{rg_base} --json {{q}} {paths_str} 2>/dev/null | {delta}",
+            "--bind",
+            f'tab:execute:kill -TERM $PPID 2>/dev/null; "{self.script_path}" --rgi-command-mode {opts_str} "{{q}}" {paths_str}',
+            "--bind",
+            "enter:execute:wormhole {1}:{2}",
+            "--header",
+            f"{rg_base} {{q}} {paths_str}",
+            "--preview",
+            f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
         ]
 
     def _create_command_to_pattern_script(self) -> str:
         """Create the shell script for switching from command to pattern mode."""
         # This complex parsing logic stays in shell for now as it runs inside fzf
-        return '''
+        return (
+            '''
             cmd="{q}"
             # Extract pattern after --json (just the next word after --json)
             PATTERN=$(echo "$cmd" | sed -E "s/.*--json +([^ ]+).*/\\1/" | tr -d "'\\"")
@@ -163,16 +190,21 @@ class RgiSession:
             
             # Combine options
             OPTIONS="$OPTIONS_BEFORE $OPTIONS_AFTER"
-            [[ -z "$PATHS" ]] && PATHS="''' + ' '.join(self.paths) + '''"
+            [[ -z "$PATHS" ]] && PATHS="'''
+            + " ".join(self.paths)
+            + '''"
             
             kill -TERM $PPID 2>/dev/null
-            "''' + self.script_path + '''" $OPTIONS "$PATTERN" $PATHS
-        '''.strip()
+            "'''
+            + self.script_path
+            + """" $OPTIONS "$PATTERN" $PATHS
+        """.strip()
+        )
 
     def run(self):
         """Run the interactive session."""
         fzf_cmd = self.build_fzf_command()
-        
+
         try:
             # Use bash to run the command to handle the complex shell scripts in bindings
             env = os.environ.copy()
@@ -216,7 +248,7 @@ def main(
         rgi -t py "import" .        # Search Python files for "import"
         rgi -g '!*.html' test .     # Search for "test" excluding HTML files
     """
-    
+
     # Build options list
     options = []
     if glob:
@@ -230,7 +262,7 @@ def main(
             options.extend(["-e", r])
     if real_code_only:
         options.append("--real-code-only")
-    
+
     # Create and run session
     session = RgiSession(
         pattern=pattern,
@@ -238,7 +270,7 @@ def main(
         options=options,
         command_mode=rgi_command_mode,
     )
-    
+
     sys.exit(session.run())
 
 
