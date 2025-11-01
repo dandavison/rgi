@@ -18,7 +18,7 @@ total_tests=0
 passed_tests=0
 failed_tests=0
 
-# Run rgi tests
+# Run rgi tests (rgi tests)
 if [[ -d "rgi" ]]; then
     for test_script in rgi/test-*.sh; do
         if [[ -f "$test_script" ]]; then

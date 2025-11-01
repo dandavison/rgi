@@ -10,5 +10,4 @@ bat --color=always \
     --style=header,grid \
     -H $line \
     -r $start_line:+70 \
-    "$file" \
-    "$@"
+    "$file"

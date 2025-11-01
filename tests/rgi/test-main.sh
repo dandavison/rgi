@@ -18,6 +18,28 @@ NC='\033[0m' # No Color
 test_count=0
 failed_count=0
 
+# Setup test fixtures
+TEST_FIXTURE_DIR="$(pwd)/test-fixture-$$"
+# Get absolute path to rgi and script directory
+SCRIPT_REALPATH="$(realpath "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_REALPATH")"
+RGI_PATH="$(realpath "$SCRIPT_DIR/../../src/rgi/scripts/rgi")"
+echo "Setting up test fixtures in $TEST_FIXTURE_DIR..."
+echo "Using rgi at: $RGI_PATH"
+bash "$SCRIPT_DIR/../fixtures/setup_fixtures.sh" "$TEST_FIXTURE_DIR"
+cd "$TEST_FIXTURE_DIR"
+
+# Cleanup function
+cleanup() {
+    echo
+    echo "Cleaning up test fixtures..."
+    cd ..
+    rm -rf "$TEST_FIXTURE_DIR"
+}
+
+# Ensure cleanup happens on exit
+trap cleanup EXIT
+
 # Test function
 run_test() {
     local test_name="$1"
@@ -28,7 +50,12 @@ run_test() {
     echo -n "Test $test_count: $test_name... "
     
     # Run the command with test-interactive
-    output=$(tests/test-interactive "$command" 0.8 2>/dev/null || true)
+    # Use the SCRIPT_DIR that was set at the beginning
+    TEST_INTERACTIVE="$SCRIPT_DIR/../test-interactive"
+    # Debug: Show current directory and command (disabled)
+    # echo "  Debug: PWD=$(pwd)" >&2
+    # echo "  Debug: Command=$command" >&2
+    output=$("$TEST_INTERACTIVE" "$command" 0.8 2>&1 || true)
     
     if echo "$output" | grep -q "$expected_pattern"; then
         echo -e "${GREEN}PASS${NC}"
@@ -37,6 +64,7 @@ run_test() {
         echo -e "${RED}FAIL${NC}"
         echo "  Expected to find: '$expected_pattern'"
         echo "  Command: $command"
+        # echo "  Output snippet: $(echo "$output" | head -5 | tr '\n' ' ')" >&2
         failed_count=$((failed_count + 1))
         return 1
     fi
@@ -47,27 +75,27 @@ echo
 
 # Test 1: Basic search
 run_test "Basic pattern search" \
-    "rgi TODO ." \
+    "$RGI_PATH TODO ." \
     "TODO"
 
 # Test 2: Search with specific path
 run_test "Search in specific directory" \
-    "rgi TODO shell-config" \
+    "$RGI_PATH TODO shell-config" \
     "lib_prompt.sh"
 
 # Test 3: Multiple paths
 run_test "Search in multiple paths" \
-    "rgi class tools/python dotfiles/pdb" \
-    "class"
+    "$RGI_PATH function src docs" \
+    "function"
 
 # Test 4: Search with glob filter
 run_test "Search with glob filter for Python files" \
-    "rgi -g '*.py' class ." \
+    "$RGI_PATH -g '*.py' test ." \
     "\.py"
 
 # Test 5: Custom option --real-code-only
 run_test "Search with --real-code-only option" \
-    "rgi --real-code-only TODO ." \
+    "$RGI_PATH --real-code-only TODO ." \
     "TODO"
 
 echo
@@ -76,12 +104,12 @@ echo
 
 # Test 6: Check if fzf UI loads
 run_test "FZF UI renders correctly" \
-    "rgi test ." \
+    "$RGI_PATH test ." \
     "─────"
 
-# Test 7: Check preview window border
+# Test 7: Check preview window border  
 run_test "Preview window displays" \
-    "rgi function shell-config" \
+    "$RGI_PATH function src" \
     "╭─"
 
 echo
@@ -93,7 +121,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Tab switches to command mode... "
 
 SESSION="test-tab-$$"
-tmux new-session -d -s "$SESSION" "rgi TODO ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
 sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null
 sleep 1.5
@@ -117,7 +145,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Tab toggles back to pattern mode... "
 
 SESSION="test-toggle-$$"
-tmux new-session -d -s "$SESSION" "rgi TODO ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
 sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
 sleep 1.5
@@ -141,7 +169,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Typing in command mode shows results... "
 
 SESSION="test-type-$$"
-tmux new-session -d -s "$SESSION" "rgi TODO ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
 sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
 sleep 1.5
@@ -165,7 +193,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Editing command in command mode updates results... "
 
 SESSION="test-edit-$$"
-tmux new-session -d -s "$SESSION" "rgi test ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH test ." 2>/dev/null
 sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
 sleep 1.5
@@ -190,7 +218,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Path changes are retained when switching modes... "
 
 SESSION="test-path-retention-$$"
-tmux new-session -d -s "$SESSION" "rgi TODO ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
 sleep 1.5
 # Switch to command mode
 tmux send-keys -t "$SESSION" Tab 2>/dev/null
