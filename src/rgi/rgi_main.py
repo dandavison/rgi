@@ -209,11 +209,7 @@ class RgiSession:
             # Use bash to run the command to handle the complex shell scripts in bindings
             # Pipe empty string to fzf to trigger initial display
             env = os.environ.copy()
-            process = subprocess.Popen(
-                fzf_cmd, 
-                stdin=subprocess.PIPE, 
-                env=env
-            )
+            process = subprocess.Popen(fzf_cmd, stdin=subprocess.PIPE, env=env)
             # Send empty input to trigger initial display
             process.communicate(input=b"")
             return process.returncode

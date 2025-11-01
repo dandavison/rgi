@@ -37,6 +37,7 @@ rgi = "rgi.cli:main"
 [project.optional-dependencies]
 test = [
     "pytest>=7.0.0",
+    "pytest-timeout>=2.0.0",
 ]
 
 [build-system]
