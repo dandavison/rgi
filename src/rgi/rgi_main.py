@@ -4,15 +4,105 @@ Main implementation of rgi - Interactive ripgrep with fzf.
 """
 
 import os
+import re
 import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import typer
 
 app = typer.Typer(add_completion=False)
+
+
+def parse_rg_command(command: str) -> Tuple[str, List[str], List[str]]:
+    """Parse an rg command to extract pattern, options, and paths.
+
+    Returns:
+        (pattern, options, paths) tuple
+    """
+    cmd = command.strip()
+    
+    # Extract the pattern by looking for --json followed by the pattern
+    # The pattern is the next token after --json
+    pattern = ""
+    pattern_match = re.search(r'--json\s+(\S+)', cmd)
+    if pattern_match:
+        pattern_raw = pattern_match.group(1)
+        # Try to parse as a shell-quoted string
+        try:
+            pattern = shlex.split(pattern_raw)[0]
+        except (ValueError, IndexError):
+            # If shlex fails, just strip outer quotes
+            if (pattern_raw.startswith('"') and pattern_raw.endswith('"')) or \
+               (pattern_raw.startswith("'") and pattern_raw.endswith("'")):
+                pattern = pattern_raw[1:-1]
+            else:
+                pattern = pattern_raw
+    
+    # Extract everything before --json as potential options
+    before_json = cmd.split('--json')[0] if '--json' in cmd else cmd
+    
+    # Extract everything after --json <pattern> as potential options/paths
+    after_pattern = ""
+    if '--json' in cmd and pattern_match:
+        # Find where the pattern ends
+        pattern_start = pattern_match.start(1)
+        pattern_end = pattern_match.end(1)
+        after_pattern = cmd[pattern_end:].strip()
+    
+    # Parse options and paths
+    options = []
+    paths = []
+    
+    # Remove "rg" and default options from before_json
+    tokens_before = before_json.replace("rg", "", 1).strip()
+    # Remove default options
+    for default in ["--follow", "-i", "--hidden", "--color=always"]:
+        tokens_before = tokens_before.replace(default, "")
+    # Remove the default glob pattern in various formats
+    tokens_before = re.sub(r"-g\s+'!\.git/\*'", "", tokens_before)
+    tokens_before = re.sub(r'-g\s+"!\.git/\*"', "", tokens_before)
+    tokens_before = re.sub(r"-g\s+!\.git/\*", "", tokens_before)
+    
+    # Parse remaining options from before --json
+    if tokens_before.strip():
+        try:
+            parts = shlex.split(tokens_before)
+        except ValueError:
+            parts = tokens_before.split()
+        
+        i = 0
+        while i < len(parts):
+            if parts[i].startswith("-"):
+                options.append(parts[i])
+                # Check if this option takes an argument
+                if parts[i] in ["-g", "--glob", "-t", "--type", "-e", "--regexp"] and i + 1 < len(parts):
+                    i += 1
+                    options.append(parts[i])
+            i += 1
+    
+    # Parse after_pattern for additional options and paths
+    if after_pattern:
+        try:
+            parts = shlex.split(after_pattern)
+        except ValueError:
+            parts = after_pattern.split()
+        
+        i = 0
+        while i < len(parts):
+            if parts[i].startswith("-"):
+                options.append(parts[i])
+                # Check if this option takes an argument
+                if parts[i] in ["-g", "--glob", "-t", "--type", "-e", "--regexp"] and i + 1 < len(parts):
+                    i += 1
+                    options.append(parts[i])
+            else:
+                paths.append(parts[i])
+            i += 1
+    
+    return pattern, options, paths
 
 
 class RgiSession:
@@ -144,7 +234,7 @@ class RgiSession:
             "--bind",
             f"change:reload:{rg_base} --json {{q}} {paths_str} 2>/dev/null | {delta}",
             "--bind",
-            f'tab:execute:kill -TERM $PPID 2>/dev/null; "{self.script_path}" --rgi-command-mode {opts_str} "{{q}}" {paths_str}',
+            f'tab:execute:kill -TERM $PPID 2>/dev/null; "{self.script_path}" --rgi-command-mode {opts_str} {{q}} {paths_str}',
             "--bind",
             "enter:execute:wormhole {1}:{2}",
             "--header",
@@ -155,51 +245,25 @@ class RgiSession:
 
     def _create_command_to_pattern_script(self) -> str:
         """Create the shell script for switching from command to pattern mode."""
-        # This complex parsing logic stays in shell for now as it runs inside fzf
-        return (
-            '''
-            cmd="{q}"
-            # Extract pattern after --json (just the next word after --json)
-            PATTERN=$(echo "$cmd" | sed -E "s/.*--json +([^ ]+).*/\\1/" | tr -d "'\\"")
+        # Use Python to parse the command
+        return f'''
+            # Get the parsed components from Python
+            PARSED=$("{self.script_path}" --rgi-parse-command "{{q}}")
+            if [[ $? -ne 0 ]]; then
+                echo "Failed to parse command" >&2
+                exit 1
+            fi
             
-            # Extract options before --json (excluding defaults)
-            BEFORE_JSON=$(echo "$cmd" | sed -E "s/(.*)--json .*/\\1/")
-            OPTIONS_BEFORE=$(echo "$BEFORE_JSON" | \\
-                sed -E "s/^'\\''rg //;s/^rg //;s/ --follow//;s/ -i//;s/ --hidden//;s/ --color=always//;s/ -g '\\''!\\.git\\/\\*'\\''//g" | \\
-                sed -E "s/^ *//;s/ *$//")
+            # Read the parsed components (pattern|options|paths)
+            IFS='|' read -r PATTERN OPTIONS PATHS <<< "$PARSED"
             
-            # Get everything after --json <pattern>
-            AFTER_PATTERN=$(echo "$cmd" | sed -E "s/.*--json +[^ ]+ *//")
+            # If no paths specified, use the original paths
+            [[ -z "$PATHS" ]] && PATHS="{" ".join(self.paths)}"
             
-            # Split AFTER_PATTERN into options and paths
-            OPTIONS_AFTER=""
-            PATHS=""
-            set -- $AFTER_PATTERN
-            while [[ $# -gt 0 ]]; do
-                if [[ "$1" =~ ^- ]]; then
-                    OPTIONS_AFTER="$OPTIONS_AFTER $1"
-                    if [[ "$1" == "-g" ]] || [[ "$1" == "-t" ]] || [[ "$1" == "-e" ]] || [[ "$1" == "--glob" ]] || [[ "$1" == "--type" ]]; then
-                        shift
-                        [[ $# -gt 0 ]] && OPTIONS_AFTER="$OPTIONS_AFTER $1"
-                    fi
-                else
-                    PATHS="$PATHS $1"
-                fi
-                shift
-            done
-            
-            # Combine options
-            OPTIONS="$OPTIONS_BEFORE $OPTIONS_AFTER"
-            [[ -z "$PATHS" ]] && PATHS="'''
-            + " ".join(self.paths)
-            + '''"
-            
+            # Kill parent fzf and start new instance with parsed args
             kill -TERM $PPID 2>/dev/null
-            "'''
-            + self.script_path
-            + """" $OPTIONS "$PATTERN" $PATHS
-        """.strip()
-        )
+            "{self.script_path}" $OPTIONS "$PATTERN" $PATHS
+        '''.strip()
 
     def run(self):
         """Run the interactive session."""
@@ -239,6 +303,9 @@ def main(
     rgi_command_mode: bool = typer.Option(
         False, "--rgi-command-mode", help="Start in command mode", hidden=True
     ),
+    rgi_parse_command: Optional[str] = typer.Option(
+        None, "--rgi-parse-command", help="Parse rg command and return components", hidden=True
+    ),
 ):
     """
     Interactive ripgrep with fzf.
@@ -251,6 +318,13 @@ def main(
         rgi -t py "import" .        # Search Python files for "import"
         rgi -g '!*.html' test .     # Search for "test" excluding HTML files
     """
+    
+    # Handle special parse-command mode
+    if rgi_parse_command is not None:
+        pattern, options, paths = parse_rg_command(rgi_parse_command)
+        # Output in a format the shell script can parse
+        print(f"{pattern}|{' '.join(options)}|{' '.join(paths)}")
+        sys.exit(0)
 
     # Build options list
     options = []
