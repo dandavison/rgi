@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
 Main implementation of rgi - Interactive ripgrep with fzf.
+
+Clean architecture: Python manages fzf sessions and handles all searches.
+No shell scripts needed!
 """
 
 import os
@@ -8,6 +11,7 @@ import re
 import shlex
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -16,144 +20,149 @@ import typer
 app = typer.Typer(add_completion=False)
 
 
-def parse_rg_command(command: str) -> Tuple[str, List[str], List[str]]:
-    """Parse an rg command to extract pattern, options, and paths.
+@dataclass
+class FzfResult:
+    """Result from an fzf session."""
 
-    Returns:
-        (pattern, options, paths) tuple
-    """
-    cmd = command.strip()
-    
-    # Extract the pattern by looking for --json followed by the pattern
-    # The pattern is the next token after --json
-    pattern = ""
-    pattern_match = re.search(r'--json\s+(\S+)', cmd)
-    if pattern_match:
-        pattern_raw = pattern_match.group(1)
-        # Try to parse as a shell-quoted string
+    key: str  # The key that was pressed (tab, enter, esc, etc.)
+    query: str  # The current query string
+    selection: Optional[str] = None  # The selected item (if any)
+
+    @property
+    def file_path(self) -> Optional[str]:
+        """Extract file path from selection."""
+        if not self.selection:
+            return None
+        # Format is "filename:line: content"
+        parts = self.selection.split(":", 2)
+        return parts[0] if parts else None
+
+    @property
+    def line_number(self) -> Optional[int]:
+        """Extract line number from selection."""
+        if not self.selection:
+            return None
+        parts = self.selection.split(":", 2)
         try:
-            pattern = shlex.split(pattern_raw)[0]
-        except (ValueError, IndexError):
-            # If shlex fails, just strip outer quotes
-            if (pattern_raw.startswith('"') and pattern_raw.endswith('"')) or \
-               (pattern_raw.startswith("'") and pattern_raw.endswith("'")):
-                pattern = pattern_raw[1:-1]
-            else:
-                pattern = pattern_raw
-    
-    # Extract everything before --json as potential options
-    before_json = cmd.split('--json')[0] if '--json' in cmd else cmd
-    
-    # Extract everything after --json <pattern> as potential options/paths
-    after_pattern = ""
-    if '--json' in cmd and pattern_match:
-        # Find where the pattern ends
-        pattern_start = pattern_match.start(1)
-        pattern_end = pattern_match.end(1)
-        after_pattern = cmd[pattern_end:].strip()
-    
-    # Parse options and paths
-    options = []
-    paths = []
-    
-    # Remove "rg" and default options from before_json
-    tokens_before = before_json.replace("rg", "", 1).strip()
-    # Remove default options
-    for default in ["--follow", "-i", "--hidden", "--color=always"]:
-        tokens_before = tokens_before.replace(default, "")
-    # Remove the default glob pattern in various formats
-    tokens_before = re.sub(r"-g\s+'!\.git/\*'", "", tokens_before)
-    tokens_before = re.sub(r'-g\s+"!\.git/\*"', "", tokens_before)
-    tokens_before = re.sub(r"-g\s+!\.git/\*", "", tokens_before)
-    
-    # Parse remaining options from before --json
-    if tokens_before.strip():
-        try:
-            parts = shlex.split(tokens_before)
+            return int(parts[1]) if len(parts) > 1 else None
         except ValueError:
-            parts = tokens_before.split()
-        
-        i = 0
-        while i < len(parts):
-            if parts[i].startswith("-"):
-                options.append(parts[i])
-                # Check if this option takes an argument
-                if parts[i] in ["-g", "--glob", "-t", "--type", "-e", "--regexp"] and i + 1 < len(parts):
-                    i += 1
-                    options.append(parts[i])
-            i += 1
-    
-    # Parse after_pattern for additional options and paths
-    if after_pattern:
-        try:
-            parts = shlex.split(after_pattern)
-        except ValueError:
-            parts = after_pattern.split()
-        
-        i = 0
-        while i < len(parts):
-            if parts[i].startswith("-"):
-                options.append(parts[i])
-                # Check if this option takes an argument
-                if parts[i] in ["-g", "--glob", "-t", "--type", "-e", "--regexp"] and i + 1 < len(parts):
-                    i += 1
-                    options.append(parts[i])
-            else:
-                paths.append(parts[i])
-            i += 1
-    
-    return pattern, options, paths
+            return None
 
 
 class RgiSession:
-    """Manages an rgi interactive session."""
+    """Manages the interactive rgi session."""
 
     def __init__(
         self,
-        pattern: str = "",
-        paths: List[str] = None,
-        options: List[str] = None,
-        command_mode: bool = False,
+        initial_pattern: str = "",
+        initial_paths: List[str] = None,
+        initial_options: List[str] = None,
     ):
-        self.pattern = pattern or ""
-        self.paths = paths or ["."]
-        self.options = options or []
-        self.command_mode = command_mode
-        self.script_path = sys.argv[0]
-        self.setup_paths()
+        self.pattern = initial_pattern
+        self.paths = initial_paths or ["."]
+        self.options = initial_options or []
+        self.mode = "pattern"  # "pattern" or "command"
 
-    def setup_paths(self):
-        """Setup paths to scripts."""
-        # Find rgi-preview script
+        # Get the path to the Python script for callbacks
+        self.script_path = sys.argv[0]
+        if not Path(self.script_path).is_absolute():
+            self.script_path = str(Path.cwd() / self.script_path)
+
+        # Find the rgi-preview script
+        self.rgi_preview = self._find_rgi_preview()
+
+    def _find_rgi_preview(self) -> Path:
+        """Find the rgi-preview script."""
         module_dir = Path(__file__).parent
         scripts_dir = module_dir / "scripts"
 
         if scripts_dir.exists():
-            self.rgi_preview = scripts_dir / "rgi-preview"
-        else:
-            self.rgi_preview = module_dir / "rgi-preview"
+            preview = scripts_dir / "rgi-preview"
+            if preview.exists():
+                return preview
 
-        if not self.rgi_preview.exists():
-            # Fall back to looking for it on PATH
-            self.rgi_preview = "rgi-preview"
+        # Check in module directory itself
+        preview = module_dir / "rgi-preview"
+        if preview.exists():
+            return preview
 
-    def build_rg_base(self) -> str:
-        """Build the base ripgrep command."""
-        opts = " ".join(shlex.quote(opt) for opt in self.options)
-        base = "rg --follow -i --hidden -g '!.git/*'"
-        if opts:
-            base += f" {opts}"
-        base += " --color=always"
-        return base
+        # Fall back to system PATH
+        result = subprocess.run(
+            ["which", "rgi-preview"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
 
-    def build_fzf_command(self) -> List[str]:
-        """Build the complete fzf command with all bindings."""
-        rg_base = self.build_rg_base()
-        paths_str = " ".join(shlex.quote(p) for p in self.paths)
-        delta = "delta --light --grep-output-type classic"
+        # If not found, we'll error later when trying to use it
+        return Path("rgi-preview")
 
-        # Base fzf command
-        fzf_cmd = [
+    def run(self) -> int:
+        """Run the main interactive loop."""
+        while True:
+            if self.mode == "pattern":
+                result = self._run_pattern_mode()
+            else:
+                result = self._run_command_mode()
+
+            if not result:
+                # Error or empty result
+                return 1
+
+            if result.key == "ctrl-c" or result.key == "esc":
+                # User wants to exit
+                return 0
+
+            elif result.key == "enter" or result.key == "":
+                # User selected a file (empty key means default enter)
+                if result.selection and result.file_path and result.line_number:
+                    self._open_file(result.file_path, result.line_number)
+                    return 0
+                elif not result.selection:
+                    # No selection, just exit
+                    return 0
+
+            elif result.key == "tab":
+                # Switch modes
+                if self.mode == "pattern":
+                    # Save the current query as pattern and switch to command mode
+                    if result.query:
+                        self.pattern = result.query
+                    self.mode = "command"
+                else:
+                    # Parse the command and switch back to pattern mode
+                    command = result.query
+                    new_pattern, new_options, new_paths = self._parse_command(command)
+
+                    # Update state
+                    if new_pattern:
+                        self.pattern = new_pattern
+                    if new_options:
+                        self.options = new_options
+                    if new_paths:
+                        self.paths = new_paths
+
+                    self.mode = "pattern"
+
+            else:
+                # Unexpected key
+                print(f"Unexpected key: {result.key}", file=sys.stderr)
+                return 1
+
+    def _run_pattern_mode(self) -> Optional[FzfResult]:
+        """Run fzf in pattern mode."""
+        # Build the reload command - it will call back to this script
+        python_exe = sys.executable
+        reload_cmd = f'{python_exe} "{self.script_path}" --internal-search {{q}} {" ".join(shlex.quote(p) for p in self.paths)} -- {" ".join(shlex.quote(o) for o in self.options)}'
+
+        # Build the header
+        rg_base = self._build_rg_command()
+        paths_str = " ".join(self.paths)
+        header = f"Pattern Mode | {rg_base} {{q}} {paths_str}"
+
+        # Build fzf command
+        cmd = [
             "fzf",
             "--layout",
             "reverse",
@@ -164,124 +173,224 @@ class RgiSession:
             "--color",
             "light",
             "--ansi",
+            "--delimiter",
+            ":",
+            "--expect",
+            "tab,enter,esc,ctrl-c",
+            "--print-query",
+            "--query",
+            self.pattern,
+            "--phony",  # Don't filter, we provide the data
             "--bind",
-            "ctrl-k:kill-line",
+            f"change:reload:{reload_cmd}",
             "--bind",
-            "alt-right:forward-word",
-            "--bind",
-            "alt-left:backward-word",
+            f"start:reload:{reload_cmd}",
+            "--header",
+            header,
+            "--preview",
+            f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
             "--preview-window",
             "up,70%",
-            "-d",
+        ]
+
+        # Run fzf
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            input="",  # Start with empty input, will be populated by reload
+        )
+
+        return self._parse_fzf_output(result.stdout)
+
+    def _run_command_mode(self) -> Optional[FzfResult]:
+        """Run fzf in command mode."""
+        # Build the initial command
+        rg_base = self._build_rg_command()
+        paths_str = " ".join(shlex.quote(p) for p in self.paths)
+        pattern_quoted = shlex.quote(self.pattern) if self.pattern else '""'
+        initial_command = f"{rg_base} --json {pattern_quoted} {paths_str}"
+
+        # Build the reload command - evaluate the command in {q}
+        reload_cmd = "eval {q} 2>/dev/null | delta --light --grep-output-type classic"
+
+        # Build fzf command
+        cmd = [
+            "fzf",
+            "--layout",
+            "reverse",
+            "--info",
+            "hidden",
+            "--prompt",
+            " ",
+            "--color",
+            "light",
+            "--ansi",
+            "--delimiter",
             ":",
-        ]
-
-        if self.command_mode:
-            # Command mode
-            fzf_cmd.extend(self._build_command_mode_bindings(rg_base, paths_str, delta))
-        else:
-            # Pattern mode
-            fzf_cmd.extend(self._build_pattern_mode_bindings(rg_base, paths_str, delta))
-
-        return fzf_cmd
-
-    def _build_command_mode_bindings(
-        self, rg_base: str, paths_str: str, delta: str
-    ) -> List[str]:
-        """Build fzf bindings for command mode."""
-        # Initial command to display
-        pattern_quoted = shlex.quote(self.pattern) if self.pattern else '""'
-        full_command = f"{rg_base} --json {pattern_quoted} {paths_str}"
-
-        # Create the tab binding script for switching to pattern mode
-        tab_script = self._create_command_to_pattern_script()
-
-        return [
+            "--expect",
+            "tab,enter,esc,ctrl-c",
+            "--print-query",
             "--query",
-            full_command + " ",
+            initial_command,
             "--phony",
             "--bind",
-            f"start:reload:{rg_base} --json {pattern_quoted} {paths_str} 2>/dev/null | {delta}",
+            f"change:reload:{reload_cmd}",
             "--bind",
-            "start:backward-delete-char",
-            "--bind",
-            f"change:reload:eval {{q}} 2>/dev/null | {delta}",
-            "--bind",
-            f"tab:execute:{tab_script}",
-            "--bind",
-            "enter:execute:wormhole {1}:{2}",
-            "--preview",
-            f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
-        ]
-
-    def _build_pattern_mode_bindings(
-        self, rg_base: str, paths_str: str, delta: str
-    ) -> List[str]:
-        """Build fzf bindings for pattern mode."""
-        pattern_quoted = shlex.quote(self.pattern) if self.pattern else '""'
-
-        # Build the options string for passing to command mode
-        opts_str = " ".join(shlex.quote(opt) for opt in self.options)
-
-        return [
-            "--query",
-            self.pattern + " " if self.pattern else "",
-            "--phony",
-            "--bind",
-            f"start:reload:{rg_base} --json {pattern_quoted} {paths_str} 2>/dev/null | {delta}",
-            "--bind",
-            "start:backward-delete-char" if self.pattern else "start:reload:echo",
-            "--bind",
-            f"change:reload:{rg_base} --json {{q}} {paths_str} 2>/dev/null | {delta}",
-            "--bind",
-            f'tab:execute:kill -TERM $PPID 2>/dev/null; "{self.script_path}" --rgi-command-mode {opts_str} {{q}} {paths_str}',
-            "--bind",
-            "enter:execute:wormhole {1}:{2}",
+            f"start:reload:{reload_cmd}",
             "--header",
-            f"{rg_base} {{q}} {paths_str}",
+            "Command Mode | Edit the rg command directly",
             "--preview",
             f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
+            "--preview-window",
+            "up,70%",
         ]
 
-    def _create_command_to_pattern_script(self) -> str:
-        """Create the shell script for switching from command to pattern mode."""
-        # Use Python to parse the command
-        return f'''
-            # Get the parsed components from Python
-            PARSED=$("{self.script_path}" --rgi-parse-command "{{q}}")
-            if [[ $? -ne 0 ]]; then
-                echo "Failed to parse command" >&2
-                exit 1
-            fi
-            
-            # Read the parsed components (pattern|options|paths)
-            IFS='|' read -r PATTERN OPTIONS PATHS <<< "$PARSED"
-            
-            # If no paths specified, use the original paths
-            [[ -z "$PATHS" ]] && PATHS="{" ".join(self.paths)}"
-            
-            # Kill parent fzf and start new instance with parsed args
-            kill -TERM $PPID 2>/dev/null
-            "{self.script_path}" $OPTIONS "$PATTERN" $PATHS
-        '''.strip()
+        # Run fzf
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            input="",
+        )
 
-    def run(self):
-        """Run the interactive session."""
-        fzf_cmd = self.build_fzf_command()
+        return self._parse_fzf_output(result.stdout)
 
+    def _build_rg_command(self) -> str:
+        """Build the base rg command with options."""
+        base = "rg --follow -i --hidden -g '!.git/*'"
+        if self.options:
+            opts = " ".join(shlex.quote(opt) for opt in self.options)
+            base += f" {opts}"
+        base += " --color=always"
+        return base
+
+    def _parse_fzf_output(self, output: str) -> Optional[FzfResult]:
+        """Parse the output from fzf --expect --print-query."""
+        lines = output.strip().split("\n")
+
+        if len(lines) < 2:
+            return None
+
+        # First line is the key pressed (from --expect)
+        key = lines[0].strip()
+
+        # Second line is the query
+        query = lines[1] if len(lines) > 1 else ""
+
+        # Third line is the selection (if any)
+        selection = lines[2] if len(lines) > 2 else None
+
+        return FzfResult(key=key, query=query, selection=selection)
+
+    def _parse_command(self, command: str) -> Tuple[str, List[str], List[str]]:
+        """Parse an rg command to extract pattern, options, and paths."""
+        cmd = command.strip()
+
+        # Find the pattern after --json
+        pattern = ""
+        pattern_match = re.search(r"--json\s+(\S+)", cmd)
+        if pattern_match:
+            pattern_raw = pattern_match.group(1)
+            # Remove quotes if present
+            if pattern_raw.startswith('"') and pattern_raw.endswith('"'):
+                pattern = pattern_raw[1:-1]
+            elif pattern_raw.startswith("'") and pattern_raw.endswith("'"):
+                pattern = pattern_raw[1:-1]
+            else:
+                pattern = pattern_raw
+
+        # Extract options (everything that starts with -)
+        # Skip default options
+        options = []
+        paths = []
+
+        # Remove the rg command and defaults
+        cmd_clean = re.sub(r"^rg\s+", "", cmd)
+        cmd_clean = re.sub(r"--follow\s*", "", cmd_clean)
+        cmd_clean = re.sub(r"-i\s*", "", cmd_clean)
+        cmd_clean = re.sub(r"--hidden\s*", "", cmd_clean)
+        cmd_clean = re.sub(r"--color=always\s*", "", cmd_clean)
+        cmd_clean = re.sub(r"-g\s+'!\.git/\*'\s*", "", cmd_clean)
+        cmd_clean = re.sub(
+            r"--json\s+\S+\s*", "", cmd_clean
+        )  # Remove --json and pattern
+
+        # Parse what's left
         try:
-            # Use bash to run the command to handle the complex shell scripts in bindings
-            # Pipe empty string to fzf to trigger initial display
-            env = os.environ.copy()
-            process = subprocess.Popen(fzf_cmd, stdin=subprocess.PIPE, env=env)
-            # Send empty input to trigger initial display
-            process.communicate(input=b"")
-            return process.returncode
-        except KeyboardInterrupt:
-            return 130
-        except Exception as e:
-            print(f"Error in fzf: {e}", file=sys.stderr)
-            return 1
+            tokens = shlex.split(cmd_clean)
+        except ValueError:
+            tokens = cmd_clean.split()
+
+        i = 0
+        while i < len(tokens):
+            if tokens[i].startswith("-"):
+                options.append(tokens[i])
+                # Check if this option needs an argument
+                if tokens[i] in [
+                    "-g",
+                    "--glob",
+                    "-t",
+                    "--type",
+                    "-e",
+                    "--regexp",
+                ] and i + 1 < len(tokens):
+                    i += 1
+                    options.append(tokens[i])
+            else:
+                paths.append(tokens[i])
+            i += 1
+
+        return pattern, options, paths
+
+    def _open_file(self, file_path: str, line_number: int):
+        """Open a file at the specified line using wormhole or $EDITOR."""
+        # Try wormhole first
+        try:
+            subprocess.run(["wormhole", f"{file_path}:{line_number}"], check=True)
+            return
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+
+        # Fall back to $EDITOR
+        editor = os.environ.get("EDITOR", "vi")
+        try:
+            # Most editors support +LINE syntax
+            subprocess.run([editor, f"+{line_number}", file_path])
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Just open the file
+            subprocess.run([editor, file_path])
+
+
+def internal_search(pattern: str, paths: List[str], options: List[str]):
+    """Execute an rg search and output results formatted for fzf."""
+    # Build the rg command
+    cmd_parts = ["rg", "--follow", "-i", "--hidden", "-g", "!.git/*"]
+    cmd_parts.extend(options)
+    cmd_parts.extend(["--json", pattern])
+    cmd_parts.extend(paths)
+
+    # Run rg and pipe to delta
+    rg_proc = subprocess.Popen(
+        cmd_parts,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+
+    delta_proc = subprocess.Popen(
+        ["delta", "--light", "--grep-output-type", "classic"],
+        stdin=rg_proc.stdout,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+
+    rg_proc.stdout.close()
+    output, _ = delta_proc.communicate()
+
+    # Output the results
+    print(output, end="")
 
 
 @app.command()
@@ -300,11 +409,11 @@ def main(
     real_code_only: bool = typer.Option(
         False, "--real-code-only", help="Search only in real code"
     ),
-    rgi_command_mode: bool = typer.Option(
-        False, "--rgi-command-mode", help="Start in command mode", hidden=True
-    ),
-    rgi_parse_command: Optional[str] = typer.Option(
-        None, "--rgi-parse-command", help="Parse rg command and return components", hidden=True
+    internal_search_flag: Optional[str] = typer.Option(
+        None,
+        "--internal-search",
+        help="Internal search mode for fzf callback",
+        hidden=True,
     ),
 ):
     """
@@ -318,15 +427,43 @@ def main(
         rgi -t py "import" .        # Search Python files for "import"
         rgi -g '!*.html' test .     # Search for "test" excluding HTML files
     """
-    
-    # Handle special parse-command mode
-    if rgi_parse_command is not None:
-        pattern, options, paths = parse_rg_command(rgi_parse_command)
-        # Output in a format the shell script can parse
-        print(f"{pattern}|{' '.join(options)}|{' '.join(paths)}")
+
+    # Handle internal search mode
+    if internal_search_flag is not None:
+        # Parse the remaining args after --internal-search
+        # Format: --internal-search PATTERN PATH1 PATH2 ... -- OPTION1 OPTION2 ...
+        search_pattern = internal_search_flag
+        search_paths = []
+        search_options = []
+
+        # Collect paths until we hit "--" or run out of args
+        in_options = False
+        for arg in paths or []:
+            if arg == "--":
+                in_options = True
+            elif in_options:
+                search_options.append(arg)
+            else:
+                search_paths.append(arg)
+
+        # Add any options from the main command
+        if glob:
+            for g in glob:
+                search_options.extend(["-g", g])
+        if type_filter:
+            for t in type_filter:
+                search_options.extend(["-t", t])
+        if regexp:
+            for r in regexp:
+                search_options.extend(["-e", r])
+
+        if not search_paths:
+            search_paths = ["."]
+
+        internal_search(search_pattern, search_paths, search_options)
         sys.exit(0)
 
-    # Build options list
+    # Build options list for normal mode
     options = []
     if glob:
         for g in glob:
@@ -342,10 +479,9 @@ def main(
 
     # Create and run session
     session = RgiSession(
-        pattern=pattern,
-        paths=list(paths) if paths else None,
-        options=options,
-        command_mode=rgi_command_mode,
+        initial_pattern=pattern or "",
+        initial_paths=paths if paths else None,
+        initial_options=options,
     )
 
     sys.exit(session.run())
