@@ -28,7 +28,7 @@ run_test() {
     echo -n "Test $test_count: $test_name... "
     
     # Run the command with test-interactive
-    output=$(tests/test-interactive "$command" 0.8 2>/dev/null || true)
+    output=$(../test-interactive "$command" 0.8 2>/dev/null || true)
     
     if echo "$output" | grep -q "$expected_pattern"; then
         echo -e "${GREEN}PASS${NC}"
