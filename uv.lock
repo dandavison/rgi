@@ -141,7 +141,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rg-i"
+name = "rgi"
 version = "0.1.0"
 source = { editable = "." }
 

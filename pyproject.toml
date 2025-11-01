@@ -1,5 +1,5 @@
 [project]
-name = "rg-i"
+name = "rgi"
 version = "0.1.0"
 description = "Interactive file search via ripgrep, fzf, bat, and delta"
 readme = "README.md"
@@ -44,6 +44,3 @@ build-backend = "uv_build"
 
 [tool.uv]
 package = true
-
-[tool.uv.build-backend]
-module-name = "rgi"
