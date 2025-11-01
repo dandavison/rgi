@@ -31,7 +31,6 @@ classifiers = [
 
 [project.scripts]
 rgi = "rgi.cli:main"
-rgi-test = "rgi.test_runner:run_tests"
 
 [project.optional-dependencies]
 test = [
