@@ -20,10 +20,13 @@ failed_count=0
 
 # Setup test fixtures
 TEST_FIXTURE_DIR="$(pwd)/test-fixture-$$"
-RGI_PATH="$(cd ../.. && pwd)/rgi"  # Get absolute path to rgi
+# Get absolute path to rgi and script directory
+SCRIPT_REALPATH="$(realpath "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "$SCRIPT_REALPATH")"
+RGI_PATH="$(realpath "$SCRIPT_DIR/../../rgi")"
 echo "Setting up test fixtures in $TEST_FIXTURE_DIR..."
 echo "Using rgi at: $RGI_PATH"
-bash ../fixtures/setup_fixtures.sh "$TEST_FIXTURE_DIR"
+bash "$SCRIPT_DIR/../fixtures/setup_fixtures.sh" "$TEST_FIXTURE_DIR"
 cd "$TEST_FIXTURE_DIR"
 
 # Cleanup function
@@ -47,7 +50,12 @@ run_test() {
     echo -n "Test $test_count: $test_name... "
     
     # Run the command with test-interactive
-    output=$(../../test-interactive "$command" 0.8 2>/dev/null || true)
+    # Use the SCRIPT_DIR that was set at the beginning
+    TEST_INTERACTIVE="$SCRIPT_DIR/../test-interactive"
+    # Debug: Show current directory and command (disabled)
+    # echo "  Debug: PWD=$(pwd)" >&2
+    # echo "  Debug: Command=$command" >&2
+    output=$("$TEST_INTERACTIVE" "$command" 0.8 2>&1 || true)
     
     if echo "$output" | grep -q "$expected_pattern"; then
         echo -e "${GREEN}PASS${NC}"
@@ -56,6 +64,7 @@ run_test() {
         echo -e "${RED}FAIL${NC}"
         echo "  Expected to find: '$expected_pattern'"
         echo "  Command: $command"
+        # echo "  Output snippet: $(echo "$output" | head -5 | tr '\n' ' ')" >&2
         failed_count=$((failed_count + 1))
         return 1
     fi

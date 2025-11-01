@@ -33,7 +33,8 @@ echo "=== Testing: $COMMAND ===" >&2
 echo "=== Waiting ${SLEEP_TIME}s for UI to render ===" >&2
 
 # Create a detached tmux session running the command
-tmux new-session -d -s "$SESSION_NAME" -c "$(pwd)" "$COMMAND"
+# Use the current directory as the working directory for the command
+tmux new-session -d -s "$SESSION_NAME" -c "$(pwd)" bash -c "$COMMAND"
 
 # Wait for the UI to render
 sleep "$SLEEP_TIME"
