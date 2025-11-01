@@ -1,10 +1,32 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
 .venv
+*.egg-info/
+dist/
+build/
+*.egg
+
+# uv
+.venv/
+uv.lock
+
+# Test artifacts
+tests/test-fixture-*
+/tmp/rgi-debug.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
