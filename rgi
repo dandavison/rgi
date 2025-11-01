@@ -11,7 +11,9 @@ fi
 
 # Get directory containing this script
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
-RGI_PREVIEW="$SCRIPT_DIR/rgi-preview"
+
+# Add script directory to PATH so rgi-preview can be found
+export PATH="$SCRIPT_DIR:$PATH"
 
 # Parse arguments
 pattern=""
@@ -83,7 +85,7 @@ if [[ "$MODE" == "command" ]]; then
             kill -TERM $PPID 2>/dev/null
             '"$SCRIPT_PATH"' "$PATTERN" $PATHS' \
         --bind='enter:execute:wormhole {1}:{2}' \
-        --preview="[[ -n {1} ]] && '$RGI_PREVIEW' {1} {2}"
+        --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 else
     # Pattern mode - the query is just the search pattern
     # Use --phony with start:reload to show initial results
