@@ -1,7 +1,46 @@
 [project]
 name = "rgi"
 version = "0.1.0"
-description = "Add your description here"
+description = "Interactive file search via ripgrep, fzf, bat, and delta"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.8"
 dependencies = []
+authors = [
+    { name = "Dan Davison", email = "dandavison7@gmail.com" }
+]
+keywords = ["ripgrep", "rg", "fzf", "search", "interactive", "bat", "delta", "grep"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: System :: Shells",
+    "Topic :: Text Processing",
+    "Topic :: Utilities",
+]
+
+[project.scripts]
+rgi = "rgi.cli:main"
+rgi-test = "rgi.test_runner:run_tests"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.6,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = true

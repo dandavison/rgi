@@ -9,6 +9,12 @@ if [[ ! "$SCRIPT_PATH" = /* ]]; then
     SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 fi
 
+# Get directory containing this script
+SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+
+# Add script directory to PATH so rgi-preview can be found
+export PATH="$SCRIPT_DIR:$PATH"
+
 # Parse arguments
 pattern=""
 paths=()
