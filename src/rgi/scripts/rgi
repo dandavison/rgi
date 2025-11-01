@@ -68,22 +68,49 @@ if [[ "$MODE" == "command" ]]; then
         --bind='start:backward-delete-char' \
         --bind='change:reload:eval {q} 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:
-            # Extract the pattern and paths from the edited command
+            # Extract the pattern and reconstruct command for pattern mode
             cmd="{q}"
-            # Simple extraction - get word after --json, strip quotes and backslashes
-            PATTERN=$(echo "$cmd" | sed -E "s/.*--json +([^ ]+).*/\1/;s/[\"'\''\\\\]//g")
-            # Extract paths - everything after the pattern
-            # First remove everything up to and including the pattern, and strip quotes
-            AFTER_PATTERN=$(echo "$cmd" | sed -E "s/.*--json +[^ ]+ *//;s/^[\"'\'']//;s/[\"'\'']$//")
-            if [[ -n "$AFTER_PATTERN" ]]; then
-                PATHS="$AFTER_PATTERN"
-            else
-                PATHS="${paths[*]}"
-            fi
+            # Extract pattern after --json (just the next word after --json)
+            PATTERN=$(echo "$cmd" | sed -E "s/.*--json +([^ ]+).*/\1/" | tr -d "'\''\"")
+
+            # Extract all options that appear BEFORE --json
+            # Remove everything after --json, then remove the default options
+            BEFORE_JSON=$(echo "$cmd" | sed -E "s/(.*)--json .*/\1/")
+            # Remove default options and rg command (handle the escaped single quotes)
+            OPTIONS_BEFORE=$(echo "$BEFORE_JSON" | \
+                sed -E "s/^'\''rg //;s/^rg //;s/ --follow//;s/ -i//;s/ --hidden//;s/ --color=always//;s/ -g '\''!\.git\/\*'\''//g" | \
+                sed -E "s/^ *//;s/ *$//")
+
+            # Get everything after "--json <pattern>"
+            AFTER_PATTERN=$(echo "$cmd" | sed -E "s/.*--json +[^ ]+ *//")
+
+            # Split AFTER_PATTERN into options and paths
+            OPTIONS_AFTER=""
+            PATHS=""
+            set -- $AFTER_PATTERN
+            while [[ $# -gt 0 ]]; do
+                if [[ "$1" =~ ^- ]]; then
+                    OPTIONS_AFTER="$OPTIONS_AFTER $1"
+                    # Check if this option needs an argument
+                    if [[ "$1" == "-g" ]] || [[ "$1" == "-t" ]] || [[ "$1" == "-e" ]] || [[ "$1" == "--glob" ]] || [[ "$1" == "--type" ]]; then
+                        shift
+                        [[ $# -gt 0 ]] && OPTIONS_AFTER="$OPTIONS_AFTER $1"
+                    fi
+                else
+                    PATHS="$PATHS $1"
+                fi
+                shift
+            done
+
+            # Combine options from before and after
+            OPTIONS="$OPTIONS_BEFORE $OPTIONS_AFTER"
+            [[ -z "$PATHS" ]] && PATHS="${paths[*]}"
+
             # Kill parent fzf and start new instance
-            # echo "cmd=[$cmd] PATTERN=[$PATTERN] PATHS=[$PATHS]" >> /tmp/rgi-debug.log
+            # echo "cmd=[$cmd] PATTERN=[$PATTERN] OPTIONS=[$OPTIONS] PATHS=[$PATHS]" >> /tmp/rgi-debug.log
             kill -TERM $PPID 2>/dev/null
-            '"$SCRIPT_PATH"' "$PATTERN" $PATHS' \
+            # Pass in correct order: options, pattern, paths
+            '"$SCRIPT_PATH"' $OPTIONS "$PATTERN" $PATHS' \
         --bind='enter:execute:wormhole {1}:{2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 else
@@ -97,8 +124,8 @@ else
         --bind='start:reload:'"$RG"' --json "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
         --bind='change:reload:'"$RG"' --json {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:kill -TERM $PPID 2>/dev/null; '"$SCRIPT_PATH"' --rgi-command-mode "{q}" '"${paths[*]}" \
+        --bind='tab:execute:kill -TERM $PPID 2>/dev/null; '"$SCRIPT_PATH"' --rgi-command-mode '"$rg_opts"' "{q}" '"${paths[*]}" \
         --bind='enter:execute:wormhole {1}:{2}' \
-        --header='rg --follow -i --hidden -g "!.git/*" --color=always {q} '"${paths[*]}" \
+        --header='rg --follow -i --hidden -g "!.git/*"'"$rg_opts"' --color=always {q} '"${paths[*]}" \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 fi

@@ -245,6 +245,40 @@ fi
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
+# Test 13: Options added in command mode are retained when switching modes
+test_count=$((test_count + 1))
+echo -n "Test $test_count: Options added in command mode are retained... "
+
+SESSION="test-options-retention-$$"
+tmux new-session -d -s "$SESSION" "$RGI_PATH test ." 2>/dev/null
+sleep 2.0  # Give more time to start
+# Switch to command mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null
+sleep 2.0  # Wait for mode switch
+# Clear line and retype with additional option
+tmux send-keys -t "$SESSION" C-u 2>/dev/null  # Clear line
+sleep 0.5
+tmux send-keys -t "$SESSION" "rg --follow -i --hidden -g '!.git/*' -g '!*.html' --json test ." 2>/dev/null
+sleep 2.0  # Wait for command to be typed
+# Switch back to pattern mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null
+sleep 2.0  # Wait for mode switch back
+output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
+
+# Check if the header shows the glob filter
+if echo "$output" | grep -q -- "-g.*!\\*\\.html"; then
+    echo -e "${GREEN}PASS${NC}"
+else
+    echo -e "${RED}FAIL${NC}"
+    echo "  Expected glob filter '-g !*.html' to be retained in header"
+    echo "  Header line: $(echo "$output" | grep "rg --follow" | head -1)"
+    echo "  Full output (first 10 lines):"
+    echo "$output" | head -10 | sed 's/^/    /'
+    failed_count=$((failed_count + 1))
+fi
+
+tmux kill-session -t "$SESSION" 2>/dev/null || true
+
 echo
 echo "=== Results ==="
 echo "Total tests: $test_count"
