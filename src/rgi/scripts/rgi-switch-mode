@@ -1,126 +1,212 @@
 #!/usr/bin/env python3
 """
-Switch from command mode to pattern mode by parsing the current command.
-Takes the full rg command string from fzf's {q} and extracts:
-- Pattern (what comes after --json)
-- Options (everything between rg and --json, minus defaults)
-- Paths (everything after the pattern)
-Then restarts rgi in pattern mode with the extracted parameters.
+Switch between rgi modes by parsing the current query/command.
+
+Usage: rgi-switch-mode <target-mode> <query-string> [paths...]
+
+Where:
+- target-mode: either "pattern" or "command"
+- query-string: the current query from fzf's {q}
+- paths: optional paths to search (defaults to current directory)
 """
 
-import sys
 import os
 import re
 import signal
-import subprocess
+import sys
 from pathlib import Path
+
 
 def parse_rg_command(cmd):
     """Parse an rg command string to extract pattern, options, and paths."""
-    
+
     # Default options that are always included
-    DEFAULT_OPTIONS = ['--follow', '-i', '--hidden', '-g', '!.git/*']
-    
+    DEFAULT_OPTIONS = ["--follow", "-i", "--hidden", "-g", "!.git/*"]
+
     # Find --json in the command
-    json_match = re.search(r'--json\s+', cmd)
+    json_match = re.search(r"--json\s+", cmd)
     if not json_match:
         # If no --json found, the whole thing after 'rg' is the pattern
-        pattern_part = re.sub(r'^.*?rg\s+', '', cmd).strip()
-        return pattern_part, '', '.'
-    
+        pattern_part = re.sub(r"^.*?rg\s+", "", cmd).strip()
+        return pattern_part, "", "."
+
     json_pos = json_match.start()
-    
+
     # Extract the part between 'rg' and '--json' for options
-    rg_match = re.search(r'\brg\s+', cmd)
+    rg_match = re.search(r"\brg\s+", cmd)
     if rg_match:
-        options_part = cmd[rg_match.end():json_pos].strip()
+        options_part = cmd[rg_match.end() : json_pos].strip()
     else:
-        options_part = ''
-    
+        options_part = ""
+
     # Remove default options from the options part
     for default in DEFAULT_OPTIONS:
         # Handle both flag-only and flag-with-value cases
-        if default.startswith('-g'):
+        if default.startswith("-g"):
             # Special handling for glob patterns
-            options_part = re.sub(r"-g\s+['\"]?!\.git/\*['\"]?\s*", '', options_part)
+            options_part = re.sub(r"-g\s+['\"]?!\.git/\*['\"]?\s*", "", options_part)
         else:
-            options_part = re.sub(rf'\b{re.escape(default)}\b\s*', '', options_part)
-    
+            options_part = re.sub(rf"\b{re.escape(default)}\b\s*", "", options_part)
+
     # Clean up extra spaces
-    options_part = ' '.join(options_part.split())
-    
+    options_part = " ".join(options_part.split())
+
     # Extract pattern (first token after --json)
-    after_json = cmd[json_match.end():].strip()
-    
+    after_json = cmd[json_match.end() :].strip()
+
     # Pattern might be quoted
     if after_json.startswith('"'):
         pattern_match = re.match(r'"([^"]*)"', after_json)
         if pattern_match:
             pattern = pattern_match.group(1)
-            after_pattern = after_json[pattern_match.end():].strip()
+            after_pattern = after_json[pattern_match.end() :].strip()
         else:
             pattern = after_json.strip('"')
-            after_pattern = ''
+            after_pattern = ""
     elif after_json.startswith("'"):
         pattern_match = re.match(r"'([^']*)'", after_json)
         if pattern_match:
             pattern = pattern_match.group(1)
-            after_pattern = after_json[pattern_match.end():].strip()
+            after_pattern = after_json[pattern_match.end() :].strip()
         else:
             pattern = after_json.strip("'")
-            after_pattern = ''
+            after_pattern = ""
     else:
         # Unquoted pattern - take first word
         parts = after_json.split(None, 1)
-        pattern = parts[0] if parts else ''
-        after_pattern = parts[1] if len(parts) > 1 else ''
-    
+        pattern = parts[0] if parts else ""
+        after_pattern = parts[1] if len(parts) > 1 else ""
+
     # Paths are everything after the pattern
-    paths = after_pattern.strip() if after_pattern else '.'
-    
+    paths = after_pattern.strip() if after_pattern else "."
+
     return pattern, options_part, paths
 
+
+def switch_to_pattern_mode(query, rg_opts, paths):
+    """Switch from command mode to pattern mode."""
+    # Parse the rg command to extract pattern and options
+    pattern, options, parsed_paths = parse_rg_command(query)
+
+    # Use parsed paths from the command - they're more up-to-date than the original paths
+    # since the user might have edited them in command mode
+    if parsed_paths and parsed_paths != ".":
+        paths = parsed_paths.split()
+    elif not paths or paths == ["."]:
+        paths = ["."]
+
+    # Get the rgi script path (same directory as this script)
+    script_dir = Path(__file__).parent
+    rgi_path = script_dir / "rgi"
+
+    # Build the new rgi command
+    args = [str(rgi_path)]
+
+    # Add any existing rg_opts
+    if rg_opts:
+        import shlex
+
+        args.extend(shlex.split(rg_opts))
+
+    # Add extracted options if any
+    if options:
+        import shlex
+
+        args.extend(shlex.split(options))
+
+    # Add pattern mode flag
+    args.append("--rgi-pattern-mode")
+
+    # Add pattern and paths
+    args.append(pattern)
+    args.extend(paths)
+
+    # Execute the new rgi instance
+    os.execvp(args[0], args)
+
+
+def switch_to_command_mode(pattern, rg_opts, paths):
+    """Switch from pattern mode to command mode."""
+    # Get the rgi script path (same directory as this script)
+    script_dir = Path(__file__).parent
+    rgi_path = script_dir / "rgi"
+
+    # Build the new rgi command
+    args = [str(rgi_path)]
+
+    # Add any rg_opts
+    if rg_opts:
+        import shlex
+
+        args.extend(shlex.split(rg_opts))
+
+    # Add command mode flag
+    args.append("--rgi-command-mode")
+
+    # Add pattern and paths
+    args.append(pattern)
+    args.extend(paths)
+
+    # Execute the new rgi instance
+    os.execvp(args[0], args)
+
+
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: rgi-switch-mode <command-string>", file=sys.stderr)
+    if len(sys.argv) < 3:
+        print(
+            "Usage: rgi-switch-mode <target-mode> <query> [rg-opts] [paths...]",
+            file=sys.stderr,
+        )
         sys.exit(1)
-    
-    cmd = sys.argv[1]
-    pattern, options, paths = parse_rg_command(cmd)
-    
+
+    target_mode = sys.argv[1]
+    query = sys.argv[2]
+
+    # Parse remaining args - everything before paths starting with - is rg_opts
+    remaining_args = sys.argv[3:] if len(sys.argv) > 3 else []
+    rg_opts = []
+    paths = []
+
+    # Separate options from paths
+    i = 0
+    while i < len(remaining_args):
+        arg = remaining_args[i]
+        if arg.startswith("-"):
+            rg_opts.append(arg)
+            # Check if this option takes a value
+            if i + 1 < len(remaining_args) and not remaining_args[i + 1].startswith(
+                "-"
+            ):
+                rg_opts.append(remaining_args[i + 1])
+                i += 1
+        else:
+            # Rest are paths
+            paths = remaining_args[i:]
+            break
+        i += 1
+
+    # Default to current directory if no paths
+    if not paths:
+        paths = ["."]
+
     # Kill parent fzf process
     try:
         os.kill(os.getppid(), signal.SIGTERM)
     except:
         pass
-    
-    # Get the rgi script path (same directory as this script)
-    script_dir = Path(__file__).parent
-    rgi_path = script_dir / "rgi"
-    
-    # Build the new rgi command
-    args = [str(rgi_path)]
-    
-    # Add extracted options if any
-    if options:
-        # Split options properly, respecting quotes
-        import shlex
-        args.extend(shlex.split(options))
-    
-    # Add pattern mode flag
-    args.append('--rgi-pattern-mode')
-    
-    # Add pattern and paths
-    args.append(pattern)
-    
-    # Add paths
-    if paths and paths != '.':
-        args.extend(paths.split())
-    else:
-        args.append('.')
-    
-    # Execute the new rgi instance
-    os.execvp(args[0], args)
 
-if __name__ == '__main__':
+    # Switch to the target mode
+    if target_mode == "pattern":
+        switch_to_pattern_mode(query, " ".join(rg_opts), paths)
+    elif target_mode == "command":
+        switch_to_command_mode(query, " ".join(rg_opts), paths)
+    else:
+        print(
+            f"Error: Invalid mode '{target_mode}'. Use 'pattern' or 'command'.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+if __name__ == "__main__":
     main()

@@ -59,11 +59,12 @@ fzf() {
         --preview-window up,70% "$@"
 }
 
+# Use --phony with start:reload to show initial results
+# Hack: to trigger display we append a space and then delete it on start
 if [[ "$MODE" == "command" ]]; then
     # Command mode - show the full rg command
     full_command="rg --follow -i --hidden -g '!.git/*'$rg_opts --json $pattern ${paths[*]}"
 
-    # Hack: to trigger display we append a space and then delete it on start
     echo "" |
     fzf -d: \
         --query="$full_command " \
@@ -71,13 +72,11 @@ if [[ "$MODE" == "command" ]]; then
         --bind='start:reload:eval {q} 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
         --bind='change:reload:eval {q} 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:rgi-switch-mode {q}' \
+        --bind='tab:execute:rgi-switch-mode pattern {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 elif [[ "$MODE" == "pattern" ]]; then
     # Pattern mode - the query is just the search pattern
-    # Use --phony with start:reload to show initial results
-    # Hack: to trigger display we append a space and then delete it on start
     echo "" |
     fzf -d: \
         --query="$pattern " \
@@ -85,7 +84,7 @@ elif [[ "$MODE" == "pattern" ]]; then
         --bind='start:reload:'"$RG"' --json "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
         --bind='change:reload:'"$RG"' --json {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:kill -TERM $PPID 2>/dev/null; '"$SCRIPT_PATH"' '"$rg_opts"' --rgi-command-mode "{q}" '"${paths[*]}" \
+        --bind='tab:execute:rgi-switch-mode command {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --header='rg'"$rg_opts"' {q} '"${paths[*]}" \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
