@@ -286,6 +286,38 @@ fi
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
+# Test 15: Options not duplicated on repeated mode switches
+test_count=$((test_count + 1))
+echo -n "Test $test_count: Options not duplicated on repeated mode switches... "
+
+SESSION="test-dup-$$"
+tmux new-session -d -s "$SESSION" "$RGI_PATH -g '*.py' --rgi-pattern-mode def ." 2>/dev/null
+sleep 1.5
+# Switch to command mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null
+sleep 1.5
+# Switch back to pattern mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null
+sleep 1.5
+# Switch to command mode again
+tmux send-keys -t "$SESSION" Tab 2>/dev/null
+sleep 1.5
+output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
+
+# Check that -g '*.py' appears only once in the command
+count=$(echo "$output" | grep -o "\-g '\*.py'" | wc -l)
+if [[ $count -eq 1 ]]; then
+    echo -e "${GREEN}PASS${NC}"
+else
+    echo -e "${RED}FAIL${NC}"
+    echo "  Expected: -g '*.py' to appear exactly once"
+    echo "  Got: -g '*.py' appears $count times"
+    echo "  Query line: $(echo "$output" | grep "^>" | head -1)"
+    failed_count=$((failed_count + 1))
+fi
+
+tmux kill-session -t "$SESSION" 2>/dev/null || true
+
 echo
 echo "=== Results ==="
 echo "Total tests: $test_count"
