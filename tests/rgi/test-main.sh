@@ -332,7 +332,7 @@ echo "func OtherFunction() {}" >> "$TEST_FIXTURE_DIR/test-spaces/workflow.go"
 PATTERN="func .*UpdateWorkflowExecutionAsActive"
 
 # Use test-interactive to properly capture the initial state
-output=$("$TEST_INTERACTIVE" "$SESSION" "$RGI_PATH --rgi-pattern-mode '$PATTERN' $TEST_FIXTURE_DIR/test-spaces" 2>&1 || true)
+output=$("$TEST_INTERACTIVE" "$RGI_PATH --rgi-pattern-mode '$PATTERN' $TEST_FIXTURE_DIR/test-spaces" 1 2>&1 || true)
 
 # Check that the pattern finds the correct result
 if echo "$output" | grep -q "SomeUpdateWorkflowExecutionAsActive"; then
