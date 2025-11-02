@@ -68,8 +68,10 @@ if [[ "$MODE" == "command" ]]; then
         --bind='start:backward-delete-char' \
         --bind='change:reload:eval {q} 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:
-            # Extract the pattern and paths from the edited command
+            # Extract the pattern, options, and paths from the edited command
             cmd="{q}"
+            # Extract everything between rg and --json as options
+            OPTIONS=$(echo "$cmd" | sed -E "s/^[^ ]+ +(.*)--json.*/\1/" | sed "s/--follow -i --hidden -g '\''!.git\/\*'\''//")
             # Simple extraction - get word after --json, strip quotes and backslashes
             PATTERN=$(echo "$cmd" | sed -E "s/.*--json +([^ ]+).*/\1/;s/[\"'\''\\\\]//g")
             # Extract paths - everything after the pattern
@@ -81,9 +83,9 @@ if [[ "$MODE" == "command" ]]; then
                 PATHS="${paths[*]}"
             fi
             # Kill parent fzf and start new instance
-            # echo "cmd=[$cmd] PATTERN=[$PATTERN] PATHS=[$PATHS]" >> /tmp/rgi-debug.log
+            # echo "cmd=[$cmd] PATTERN=[$PATTERN] OPTIONS=[$OPTIONS] PATHS=[$PATHS]" >> /tmp/rgi-debug.log
             kill -TERM $PPID 2>/dev/null
-            '"$SCRIPT_PATH"' "$PATTERN" $PATHS' \
+            '"$SCRIPT_PATH"' $OPTIONS "$PATTERN" $PATHS' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 else
@@ -97,8 +99,8 @@ else
         --bind='start:reload:'"$RG"' --json "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
         --bind='change:reload:'"$RG"' --json {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:kill -TERM $PPID 2>/dev/null; '"$SCRIPT_PATH"' --rgi-command-mode "{q}" '"${paths[*]}" \
+        --bind='tab:execute:kill -TERM $PPID 2>/dev/null; '"$SCRIPT_PATH"' '"$rg_opts"' --rgi-command-mode "{q}" '"${paths[*]}" \
         --bind='enter:execute:open-in-editor {1} {2}' \
-        --header='rg --follow -i --hidden -g "!.git/*" --color=always {q} '"${paths[*]}" \
+        --header='rg --follow -i --hidden -g "!.git/*"'"$rg_opts"' --color=always {q} '"${paths[*]}" \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 fi

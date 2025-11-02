@@ -245,6 +245,39 @@ fi
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
+# Test 13: Glob pattern retention when switching modes
+test_count=$((test_count + 1))
+echo -n "Test $test_count: Glob patterns are retained when switching modes... "
+
+SESSION="test-glob-retention-$$"
+tmux new-session -d -s "$SESSION" "$RGI_PATH test ." 2>/dev/null
+sleep 1.5
+# Switch to command mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null
+sleep 1.5
+# Add a glob pattern to exclude HTML files
+tmux send-keys -t "$SESSION" C-a 2>/dev/null  # Go to beginning
+# Find the position after rg command options
+tmux send-keys -t "$SESSION" M-f M-f M-f M-f 2>/dev/null  # Skip words to get past basic options
+tmux send-keys -t "$SESSION" " -g '!*.html'" 2>/dev/null  # Add glob pattern
+sleep 1.5
+# Switch back to pattern mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null
+sleep 1.5
+output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
+
+# Check if header shows the glob pattern
+if echo "$output" | grep -q "rg.*-g.*!\\*\\.html"; then
+    echo -e "${GREEN}PASS${NC}"
+else
+    echo -e "${RED}FAIL${NC}"
+    echo "  Expected: rg command header should show '-g !*.html' after editing in command mode"
+    echo "  Got: $(echo "$output" | grep "rg --follow" | head -1)"
+    failed_count=$((failed_count + 1))
+fi
+
+tmux kill-session -t "$SESSION" 2>/dev/null || true
+
 echo
 echo "=== Results ==="
 echo "Total tests: $test_count"
@@ -254,6 +287,7 @@ if [[ $failed_count -gt 0 ]]; then
     exit 1
 else
     echo -e "Failed: ${GREEN}0${NC}"
+    echo
     echo
     echo -e "${GREEN}All tests passed!${NC}"
 fi
