@@ -12,6 +12,20 @@ export RGI_EDITOR=vscode  # vscode | cursor | idea
 
 The `rgi` command-line interface is the same as [ripgrep](https://manpages.ubuntu.com/manpages/jammy/man1/rg.1.html) (`rg`).
 
+### Configuration Files
+
+`rgi` supports ripgrep configuration files via the `RIPGREP_CONFIG_PATH` environment variable. When set, the configuration file arguments are:
+- Automatically applied to all searches
+- Displayed in the command view so you can see the effective command
+
+Example usage:
+```bash
+export RIPGREP_CONFIG_PATH=~/.ripgreprc
+rgi pattern .
+```
+
+See `example-ripgreprc` in this repository for a sample configuration file.
+
 ### Keyboard shortcuts
 
 - **Tab**: Switch between pattern mode and command mode

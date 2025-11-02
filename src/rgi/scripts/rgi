@@ -48,6 +48,26 @@ done
 while [[ $# -gt 0 ]]; do paths+=("$1"); shift; done
 [[ ${#paths[@]} -eq 0 ]] && paths=(.)
 
+# Parse ripgrep config file if RIPGREP_CONFIG_PATH is set
+config_args=""
+if [[ -n "$RIPGREP_CONFIG_PATH" && -f "$RIPGREP_CONFIG_PATH" ]]; then
+    # Parse the config file - each non-comment line is an argument
+    while IFS= read -r line; do
+        # Trim leading/trailing whitespace
+        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        # Skip comments and empty lines
+        if [[ -z "$line" || "$line" =~ ^# ]]; then
+            continue
+        fi
+        # Add to config args with proper spacing
+        if [[ -n "$config_args" ]]; then
+            config_args="$config_args $line"
+        else
+            config_args="$line"
+        fi
+    done < "$RIPGREP_CONFIG_PATH"
+fi
+
 # Implicit options that are always applied but never shown
 IMPLICIT_OPTS="--json"
 
@@ -74,7 +94,12 @@ fzf() {
 # Hack: to trigger display we append a space and then delete it on start
 if [[ "$MODE" == "command" ]]; then
     # Command mode - show the full rg command (except --json)
-    full_command="rg$rg_opts $pattern ${paths[*]}"
+    # Include config args if present
+    if [[ -n "$config_args" ]]; then
+        full_command="rg $config_args$rg_opts $pattern ${paths[*]}"
+    else
+        full_command="rg$rg_opts $pattern ${paths[*]}"
+    fi
 
     echo "" |
     fzf -d: \
@@ -83,7 +108,7 @@ if [[ "$MODE" == "command" ]]; then
         --bind='start:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"$IMPLICIT_OPTS"'$cmd"; fi; eval "$cmd" 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
         --bind='change:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"$IMPLICIT_OPTS"'$cmd"; fi; eval "$cmd" 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:rgi-switch-mode pattern {q} '"$rg_opts"' '"${paths[*]}"' ' \
+        --bind='tab:execute:'"${RIPGREP_CONFIG_PATH:+RIPGREP_CONFIG_PATH=\"$RIPGREP_CONFIG_PATH\"}"' rgi-switch-mode pattern {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 elif [[ "$MODE" == "pattern" ]]; then
@@ -95,8 +120,8 @@ elif [[ "$MODE" == "pattern" ]]; then
         --bind='start:reload:'"$RG"' "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
         --bind='change:reload:'"$RG"' {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:rgi-switch-mode command {q} '"$rg_opts"' '"${paths[*]}"' ' \
+        --bind='tab:execute:'"${RIPGREP_CONFIG_PATH:+RIPGREP_CONFIG_PATH=\"$RIPGREP_CONFIG_PATH\"}"' rgi-switch-mode command {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
-        --header='rg'"$rg_opts"' {q} '"${paths[*]}" \
+        --header='rg'"${config_args:+ $config_args}$rg_opts"' {q} '"${paths[*]}" \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 fi

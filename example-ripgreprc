@@ -1,0 +1,28 @@
+# Example ripgrep config file for use with rgi
+# To use: export RIPGREP_CONFIG_PATH=/path/to/this/file
+
+# Smart case: case-insensitive unless pattern has uppercase
+--smart-case
+
+# Always show line numbers
+-n
+
+# Ignore common directories
+--glob
+!node_modules
+--glob
+!vendor
+--glob
+!target
+--glob
+!.git
+
+# Search hidden files by default (but still ignore .git)
+--hidden
+
+# Follow symlinks
+--follow
+
+# Use 4 threads for searching
+-j
+4
