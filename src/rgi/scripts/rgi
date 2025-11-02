@@ -53,13 +53,21 @@ IMPLICIT_OPTS="--json"
 
 # Commands  
 RG="rg$rg_opts $IMPLICIT_OPTS"
-DELTA="delta --light --grep-output-type classic"
+DELTA="delta --grep-output-type classic"
 
 # fzf wrapper
 fzf() {
-    command fzf --layout reverse --info hidden --prompt ' ' --color light --ansi \
-        --bind ctrl-k:kill-line --bind alt-right:forward-word --bind alt-left:backward-word \
-        --preview-window up,70% "$@"
+    command fzf \
+        --layout reverse \
+        --info hidden \
+        --prompt ' ' \
+        --color light \
+        --ansi \
+        --bind ctrl-k:kill-line \
+        --bind alt-right:forward-word \
+        --bind alt-left:backward-word \
+        --preview-window up,70% \
+        "$@"
 }
 
 # Use --phony with start:reload to show initial results
