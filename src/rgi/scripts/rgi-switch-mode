@@ -2,12 +2,16 @@
 """
 Switch between rgi modes by parsing the current query/command.
 
-Usage: rgi-switch-mode <target-mode> <query-string> [paths...]
+Usage: rgi-switch-mode <target-mode> <query-string> [rg-opts] [paths...]
 
 Where:
 - target-mode: either "pattern" or "command"
 - query-string: the current query from fzf's {q}
+- rg-opts: optional ripgrep options (e.g. -g, -t, etc.)
 - paths: optional paths to search (defaults to current directory)
+
+Note: Implicit options (--follow, -i, --hidden, -g '!.git/*', --json, --color=always)
+are automatically added by rgi and should never be passed or shown.
 """
 
 import os
@@ -20,40 +24,86 @@ from pathlib import Path
 def parse_rg_command(cmd):
     """Parse an rg command string to extract pattern, options, and paths."""
 
-    # Default options that are always included
-    DEFAULT_OPTIONS = ["--follow", "-i", "--hidden", "-g", "!.git/*"]
+    # Implicit options that should never be shown or passed (rgi adds them automatically)
+    IMPLICIT_OPTIONS = ["--follow", "-i", "--hidden", "-g", "!.git/*", "--json", "--color=always", "--color"]
 
-    # Find --json in the command
+    # Find the pattern in the command
+    # First try to find --json (for backward compatibility)
     json_match = re.search(r"--json\s+", cmd)
-    if not json_match:
-        # If no --json found, the whole thing after 'rg' is the pattern
-        pattern_part = re.sub(r"^.*?rg\s+", "", cmd).strip()
-        return pattern_part, "", "."
-
-    json_pos = json_match.start()
-
-    # Extract the part between 'rg' and '--json' for options
-    rg_match = re.search(r"\brg\s+", cmd)
-    if rg_match:
-        options_part = cmd[rg_match.end() : json_pos].strip()
+    
+    if json_match:
+        # Old format with explicit --json
+        json_pos = json_match.start()
+        
+        # Extract the part between 'rg' and '--json' for options
+        rg_match = re.search(r"\brg\s+", cmd)
+        if rg_match:
+            options_part = cmd[rg_match.end() : json_pos].strip()
+        else:
+            options_part = ""
+            
+        # Pattern comes after --json
+        after_json = cmd[json_match.end():].strip()
     else:
-        options_part = ""
+        # New format without explicit --json
+        # Parse the command: rg [options] pattern [paths]
+        rg_match = re.search(r"\brg\s+", cmd)
+        if not rg_match:
+            # No 'rg' found, treat whole thing as pattern
+            return cmd.strip(), "", "."
+        
+        after_rg = cmd[rg_match.end():].strip()
+        
+        # Split into tokens, handling quoted strings
+        import shlex
+        try:
+            tokens = shlex.split(after_rg)
+        except:
+            tokens = after_rg.split()
+        
+        # Separate options from pattern and paths
+        options = []
+        pattern = ""
+        paths = []
+        
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if token.startswith("-"):
+                # It's an option
+                options.append(token)
+                # Check if this option takes a value
+                if token in ["-g", "--glob", "-t", "--type", "-e", "--regexp", "-f", "--file"]:
+                    if i + 1 < len(tokens):
+                        options.append(tokens[i + 1])
+                        i += 1
+            elif not pattern:
+                # First non-option is the pattern
+                pattern = token
+            else:
+                # Rest are paths
+                paths.append(token)
+            i += 1
+        
+        options_part = " ".join(options)
+        after_json = pattern + " " + " ".join(paths) if paths else pattern
 
-    # Remove default options from the options part
-    for default in DEFAULT_OPTIONS:
+    # Remove implicit options from the options part
+    for implicit in IMPLICIT_OPTIONS:
         # Handle both flag-only and flag-with-value cases
-        if default.startswith("-g"):
+        if implicit.startswith("-g"):
             # Special handling for glob patterns
             options_part = re.sub(r"-g\s+['\"]?!\.git/\*['\"]?\s*", "", options_part)
+        elif implicit in ["--color=always"]:
+            # Remove --color=always specifically
+            options_part = re.sub(r"--color=always\s*", "", options_part)
         else:
-            options_part = re.sub(rf"\b{re.escape(default)}\b\s*", "", options_part)
+            options_part = re.sub(rf"\b{re.escape(implicit)}\b\s*", "", options_part)
 
     # Clean up extra spaces
     options_part = " ".join(options_part.split())
 
-    # Extract pattern (first token after --json)
-    after_json = cmd[json_match.end() :].strip()
-
+    # Now parse the pattern and paths from after_json
     # Pattern might be quoted
     if after_json.startswith('"'):
         pattern_match = re.match(r'"([^"]*)"', after_json)

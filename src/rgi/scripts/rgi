@@ -48,8 +48,11 @@ done
 while [[ $# -gt 0 ]]; do paths+=("$1"); shift; done
 [[ ${#paths[@]} -eq 0 ]] && paths=(.)
 
+# Implicit options that are always applied but never shown
+IMPLICIT_OPTS="--follow -i --hidden -g '!.git/*' --json --color=always"
+
 # Commands  
-RG="rg --follow -i --hidden -g '!.git/*'$rg_opts --color=always"
+RG="rg $IMPLICIT_OPTS$rg_opts"
 DELTA="delta --light --grep-output-type classic"
 
 # fzf wrapper
@@ -62,16 +65,16 @@ fzf() {
 # Use --phony with start:reload to show initial results
 # Hack: to trigger display we append a space and then delete it on start
 if [[ "$MODE" == "command" ]]; then
-    # Command mode - show the full rg command
-    full_command="rg --follow -i --hidden -g '!.git/*'$rg_opts --json $pattern ${paths[*]}"
+    # Command mode - show the rg command without implicit options
+    full_command="rg$rg_opts $pattern ${paths[*]}"
 
     echo "" |
     fzf -d: \
         --query="$full_command " \
         --phony \
-        --bind='start:reload:eval {q} 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:cmd={q}; eval "\${cmd/rg/rg '"$IMPLICIT_OPTS"'}" 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:eval {q} 2>/dev/null | '"$DELTA" \
+        --bind='change:reload:cmd={q}; eval "\${cmd/rg/rg '"$IMPLICIT_OPTS"'}" 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:rgi-switch-mode pattern {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
@@ -81,9 +84,9 @@ elif [[ "$MODE" == "pattern" ]]; then
     fzf -d: \
         --query="$pattern " \
         --phony \
-        --bind='start:reload:'"$RG"' --json "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:'"$RG"' "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:'"$RG"' --json {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='change:reload:'"$RG"' {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:rgi-switch-mode command {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --header='rg'"$rg_opts"' {q} '"${paths[*]}" \
