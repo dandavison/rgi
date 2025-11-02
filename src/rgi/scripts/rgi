@@ -19,11 +19,15 @@ export PATH="$SCRIPT_DIR:$PATH"
 pattern=""
 paths=()
 rg_opts=""
-MODE="pattern"
+MODE="command"
 
 # Check for command mode flag
 if [[ "$1" == "--rgi-command-mode" ]]; then
     MODE="command"
+    shift
+fi
+if [[ "$1" == "--rgi-pattern-mode" ]]; then
+    MODE="pattern"
     shift
 fi
 
@@ -85,10 +89,10 @@ if [[ "$MODE" == "command" ]]; then
             # Kill parent fzf and start new instance
             # echo "cmd=[$cmd] PATTERN=[$PATTERN] OPTIONS=[$OPTIONS] PATHS=[$PATHS]" >> /tmp/rgi-debug.log
             kill -TERM $PPID 2>/dev/null
-            '"$SCRIPT_PATH"' $OPTIONS "$PATTERN" $PATHS' \
+            '"$SCRIPT_PATH"' $OPTIONS --rgi-pattern-mode "$PATTERN" $PATHS' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
-else
+elif [[ "$MODE" == "pattern" ]]; then
     # Pattern mode - the query is just the search pattern
     # Use --phony with start:reload to show initial results
     # Hack: to trigger display we append a space and then delete it on start
