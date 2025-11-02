@@ -72,9 +72,9 @@ if [[ "$MODE" == "command" ]]; then
     fzf -d: \
         --query="$full_command " \
         --phony \
-        --bind='start:reload:cmd={q}; eval "\${cmd/rg/rg '"$IMPLICIT_OPTS"'}" 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"$IMPLICIT_OPTS"'$cmd"; fi; eval "$cmd" 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:cmd={q}; eval "\${cmd/rg/rg '"$IMPLICIT_OPTS"'}" 2>/dev/null | '"$DELTA" \
+        --bind='change:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"$IMPLICIT_OPTS"'$cmd"; fi; eval "$cmd" 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:rgi-switch-mode pattern {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
