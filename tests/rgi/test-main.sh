@@ -332,7 +332,7 @@ echo "func OtherFunction() {}" >> "$TEST_FIXTURE_DIR/test-spaces/workflow.go"
 PATTERN="func .*UpdateWorkflowExecutionAsActive"
 
 # Start rgi with the pattern containing spaces
-tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode '$PATTERN' $TEST_FIXTURE_DIR/test-spaces" 2>/dev/null
+tmux new-session -d -s "$SESSION" bash -c "$RGI_PATH --rgi-pattern-mode '$PATTERN' $TEST_FIXTURE_DIR/test-spaces" 2>/dev/null
 sleep 2  # Give time for search to run
 output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
 

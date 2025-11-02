@@ -124,13 +124,15 @@ if [[ "$MODE" == "command" ]]; then
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 elif [[ "$MODE" == "pattern" ]]; then
     # Pattern mode - the query is just the search pattern
+    # Use printf %q to properly escape the pattern for shell execution
+    escaped_pattern=$(printf %q "$pattern")
     echo "" |
     fzf -d: \
         --query="$pattern " \
         --phony \
-        --bind='start:reload:RIPGREP_CONFIG_PATH= '"$RG"' "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:RIPGREP_CONFIG_PATH= '"$RG"' '"$escaped_pattern"' '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:RIPGREP_CONFIG_PATH= '"$RG"' "{q}" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='change:reload:RIPGREP_CONFIG_PATH= '"$RG"' {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:'"${RIPGREP_CONFIG_PATH:+RIPGREP_CONFIG_PATH=\"$RIPGREP_CONFIG_PATH\"}"' rgi-switch-mode command {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --header='rg'"${config_args:+ $config_args}$rg_opts"' {q} '"${paths[*]}" \
