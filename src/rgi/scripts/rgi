@@ -118,7 +118,7 @@ if [[ "$MODE" == "command" ]]; then
         --bind='start:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"${config_args:+ $config_args}"' '"$IMPLICIT_OPTS"'$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
         --bind='change:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"${config_args:+ $config_args}"' '"$IMPLICIT_OPTS"'$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:'"${RIPGREP_CONFIG_PATH:+RIPGREP_CONFIG_PATH=\"$RIPGREP_CONFIG_PATH\"}"' rgi-switch-mode pattern {q} '"$rg_opts"' '"${paths[*]}"' ' \
+        --bind='tab:execute:'"${RIPGREP_CONFIG_PATH:+RIPGREP_CONFIG_PATH=\"$RIPGREP_CONFIG_PATH\"}"' rgi-switch-mode pattern {q}' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --header="$header" \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
