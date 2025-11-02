@@ -11,6 +11,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -146,8 +147,11 @@ class RgiSession:
                     self.mode = "pattern"
 
             else:
-                # Unexpected key
-                print(f"Unexpected key: {result.key}", file=sys.stderr)
+                # Unexpected key - debug output
+                print(f"DEBUG: Unexpected key: '{result.key}'", file=sys.stderr)
+                print(f"DEBUG: Query: '{result.query}'", file=sys.stderr)
+                print(f"DEBUG: Selection: '{result.selection}'", file=sys.stderr)
+                print(f"DEBUG: Mode was: {self.mode}", file=sys.stderr)
                 return 1
 
     def _run_pattern_mode(self) -> Optional[FzfResult]:
@@ -211,50 +215,71 @@ class RgiSession:
         pattern_quoted = shlex.quote(self.pattern) if self.pattern else '""'
         initial_command = f"{rg_base} --json {pattern_quoted} {paths_str}"
 
-        # Build the reload command - evaluate the command in {q}
-        reload_cmd = "eval {q} 2>/dev/null | delta --light --grep-output-type classic"
+        # Create a safer reload command using a wrapper script
+        # This avoids issues with shell evaluation of complex commands
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as f:
+            f.write("""#!/bin/bash
+# Execute the command passed as argument
+COMMAND="$1"
+if [[ -n "$COMMAND" ]]; then
+    # Try to execute the command and pipe through delta
+    bash -c "$COMMAND" 2>/dev/null | delta --light --grep-output-type classic
+fi
+""")
+            wrapper_script = f.name
 
-        # Build fzf command
-        cmd = [
-            "fzf",
-            "--layout",
-            "reverse",
-            "--info",
-            "hidden",
-            "--prompt",
-            " ",
-            "--color",
-            "light",
-            "--ansi",
-            "--delimiter",
-            ":",
-            "--expect",
-            "tab,enter,esc,ctrl-c",
-            "--print-query",
-            "--query",
-            initial_command,
-            "--phony",
-            "--bind",
-            f"change:reload:{reload_cmd}",
-            "--bind",
-            f"start:reload:{reload_cmd}",
-            "--header",
-            "Command Mode | Edit the rg command directly",
-            "--preview",
-            f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
-            "--preview-window",
-            "up,70%",
-        ]
+        os.chmod(wrapper_script, 0o755)
 
-        # Run fzf
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            input="",
-        )
+        try:
+            # Build the reload command using the wrapper
+            reload_cmd = f"{wrapper_script} {{q}}"
 
-        return self._parse_fzf_output(result.stdout)
+            # Build fzf command
+            cmd = [
+                "fzf",
+                "--layout",
+                "reverse",
+                "--info",
+                "hidden",
+                "--prompt",
+                " ",
+                "--color",
+                "light",
+                "--ansi",
+                "--delimiter",
+                ":",
+                "--expect",
+                "tab,enter,esc,ctrl-c",
+                "--print-query",
+                "--query",
+                initial_command,
+                "--phony",
+                "--bind",
+                f"change:reload:{reload_cmd}",
+                "--bind",
+                f"start:reload:{reload_cmd}",
+                "--header",
+                "Command Mode | Edit the rg command directly",
+                "--preview",
+                f'[[ -n {{1}} ]] && "{self.rgi_preview}" {{1}} {{2}}',
+                "--preview-window",
+                "up,70%",
+            ]
+
+            # Run fzf
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                input="",
+            )
+
+            return self._parse_fzf_output(result.stdout)
+        finally:
+            try:
+                os.unlink(wrapper_script)
+            except:
+                pass
 
     def _build_rg_command(self) -> str:
         """Build the base rg command with options."""
@@ -267,19 +292,38 @@ class RgiSession:
 
     def _parse_fzf_output(self, output: str) -> Optional[FzfResult]:
         """Parse the output from fzf --expect --print-query."""
+        if not output:
+            return None
+
         lines = output.strip().split("\n")
+
+        # Debug output
+        if os.environ.get("RGI_DEBUG"):
+            print(f"DEBUG: Raw fzf output lines: {lines}", file=sys.stderr)
 
         if len(lines) < 2:
             return None
 
         # First line is the key pressed (from --expect)
+        # If it's not one of our expected keys, it's empty (meaning Enter was pressed)
         key = lines[0].strip()
+        expected_keys = {"tab", "enter", "esc", "ctrl-c"}
+        if key not in expected_keys:
+            # If the first line isn't an expected key, it means Enter was pressed
+            # and this line is actually the query
+            key = "enter"  # Default to enter if no key specified
+            query = lines[0] if lines else ""
+            selection = lines[1] if len(lines) > 1 else None
+        else:
+            # Standard format: key, query, selection
+            query = lines[1] if len(lines) > 1 else ""
+            selection = lines[2] if len(lines) > 2 else None
 
-        # Second line is the query
-        query = lines[1] if len(lines) > 1 else ""
-
-        # Third line is the selection (if any)
-        selection = lines[2] if len(lines) > 2 else None
+        if os.environ.get("RGI_DEBUG"):
+            print(
+                f"DEBUG: Parsed - key: '{key}', query: '{query}', selection: '{selection}'",
+                file=sys.stderr,
+            )
 
         return FzfResult(key=key, query=query, selection=selection)
 

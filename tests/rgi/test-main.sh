@@ -107,7 +107,7 @@ run_test "FZF UI renders correctly" \
     "$RGI_PATH test ." \
     "─────"
 
-# Test 7: Check preview window border  
+# Test 7: Check preview window border
 run_test "Preview window displays" \
     "$RGI_PATH function src" \
     "╭─"
