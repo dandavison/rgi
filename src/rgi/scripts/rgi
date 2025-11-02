@@ -215,7 +215,8 @@ def build_command_mode_fzf(
     ripgrep_env = (
         f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
     )
-    tab_execute = f"{ripgrep_env} rgi-switch-mode pattern {{q}}"
+    # Note: We pass the entire command as a single argument to avoid shell splitting
+    tab_execute = f'{ripgrep_env} rgi-switch-mode pattern "{{q}}"'
 
     return fzf_base() + [
         "-d:",
@@ -259,8 +260,9 @@ def build_pattern_mode_fzf(
     # Pattern mode - the query is just the search pattern
     paths_str = " ".join(paths)
 
-    # Quote pattern for display in fzf query (shlex.quote handles spaces and special chars)
-    query_pattern = shlex.quote(pattern) if pattern else ""
+    # Don't quote pattern for fzf query - fzf handles it internally
+    # We only need quoting when passing to shell commands
+    query_pattern = pattern
 
     # Build the bind strings
     # For start_reload, always quote the pattern for shell safety
@@ -270,9 +272,12 @@ def build_pattern_mode_fzf(
     ripgrep_env = (
         f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
     )
-    tab_execute = f"{ripgrep_env} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
+    # Quote {q} to prevent shell splitting when pattern has spaces
+    tab_execute = (
+        f'{ripgrep_env} rgi-switch-mode command "{{q}}" {rg_opts} {paths_str} '
+    )
 
-    header = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
+    header = f"rg{' ' + config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
 
     return fzf_base() + [
         "-d:",
