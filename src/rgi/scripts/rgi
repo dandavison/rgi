@@ -1,138 +1,208 @@
-#!/bin/bash
+#!/usr/bin/env python3
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 # Debug logging (disabled for now)
-# echo "rgi started with args: $@" >> /tmp/rgi-debug.log
+# with open("/tmp/rgi-debug.log", "a") as f:
+#     f.write(f"rgi started with args: {sys.argv}\n")
 
 # Get absolute path to this script
-SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}" 2>/dev/null || readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
-if [[ ! "$SCRIPT_PATH" = /* ]]; then
-    SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
-fi
+SCRIPT_PATH = str(Path(__file__).resolve())
 
 # Get directory containing this script
-SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
+SCRIPT_DIR = str(Path(SCRIPT_PATH).parent)
 
 # Add script directory to PATH so rgi-preview can be found
-export PATH="$SCRIPT_DIR:$PATH"
+os.environ["PATH"] = f"{SCRIPT_DIR}:{os.environ.get('PATH', '')}"
 
 # Parse arguments
-pattern=""
-paths=()
-rg_opts=""
-MODE="command"
+pattern = ""
+paths = []
+rg_opts = ""
+MODE = "command"
 
 # Single pass through arguments
-while [[ $# -gt 0 ]]; do
-    if [[ "$1" == "--rgi-command-mode" ]]; then
-        MODE="command"
-        shift
-    elif [[ "$1" == "--rgi-pattern-mode" ]]; then
-        MODE="pattern"
-        shift
-    elif [[ "$1" =~ ^- ]]; then
-        opt="$1"
-        rg_opts+=" $opt"
-        shift
-        case "$opt" in
-            -g|--glob|-t|--type|-e|--regexp)
-                [[ $# -gt 0 ]] && rg_opts+=" '$1'" && shift
-                ;;
-        esac
-    else
+argv = sys.argv[1:]  # Skip script name
+i = 0
+while i < len(argv):
+    if argv[i] == "--rgi-command-mode":
+        MODE = "command"
+        i += 1
+    elif argv[i] == "--rgi-pattern-mode":
+        MODE = "pattern"
+        i += 1
+    elif argv[i].startswith("-"):
+        opt = argv[i]
+        rg_opts += f" {opt}"
+        i += 1
+        if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"]:
+            if i < len(argv):
+                rg_opts += f" '{argv[i]}'"
+                i += 1
+    else:
         break
-    fi
-done
 
 # Pattern and paths
-[[ $# -gt 0 ]] && pattern="$1" && shift
-while [[ $# -gt 0 ]]; do paths+=("$1"); shift; done
-[[ ${#paths[@]} -eq 0 ]] && paths=(.)
+if i < len(argv):
+    pattern = argv[i]
+    i += 1
+while i < len(argv):
+    paths.append(argv[i])
+    i += 1
+if len(paths) == 0:
+    paths = ["."]
 
 # Parse ripgrep config file if RIPGREP_CONFIG_PATH is set
 # We'll include these args explicitly rather than relying on ripgrep to read them
-config_args=""
-if [[ -n "$RIPGREP_CONFIG_PATH" && -f "$RIPGREP_CONFIG_PATH" ]]; then
+config_args = ""
+RIPGREP_CONFIG_PATH = os.environ.get("RIPGREP_CONFIG_PATH", "")
+if RIPGREP_CONFIG_PATH and os.path.isfile(RIPGREP_CONFIG_PATH):
     # Parse the config file - each non-comment line is an argument
-    while IFS= read -r line; do
-        # Trim leading/trailing whitespace
-        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        # Skip comments and empty lines
-        if [[ -z "$line" || "$line" =~ ^# ]]; then
-            continue
-        fi
-        # If line doesn't start with -, wrap it in single quotes
-        # (config files don't need quotes, but shell commands do)
-        if [[ ! "$line" =~ ^- ]]; then
-            line="'$line'"
-        fi
-        # Add each arg - they need to be properly spaced
-        if [[ -n "$config_args" ]]; then
-            config_args="$config_args $line"
-        else
-            config_args="$line"
-        fi
-    done < "$RIPGREP_CONFIG_PATH"
-fi
+    with open(RIPGREP_CONFIG_PATH, "r") as f:
+        for line in f:
+            # Trim leading/trailing whitespace
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith("#"):
+                continue
+            # If line doesn't start with -, wrap it in single quotes
+            # (config files don't need quotes, but shell commands do)
+            if not line.startswith("-"):
+                line = f"'{line}'"
+            # Add each arg - they need to be properly spaced
+            if config_args:
+                config_args += f" {line}"
+            else:
+                config_args = line
 
 # Implicit options that are always applied but never shown
-IMPLICIT_OPTS="--json"
+IMPLICIT_OPTS = "--json"
 
-# Commands  
+# Commands
 # Include config args explicitly (not via RIPGREP_CONFIG_PATH to avoid double application)
-RG="rg${config_args:+ $config_args}$rg_opts $IMPLICIT_OPTS"
-DELTA="delta --grep-output-type classic"
+config_part = f" {config_args}" if config_args else ""
+RG = f"rg{config_part}{rg_opts} {IMPLICIT_OPTS}"
+DELTA = "delta --grep-output-type classic"
 
-# fzf wrapper
-fzf() {
-    command fzf \
-        --layout reverse \
-        --info hidden \
-        --prompt ' ' \
-        --color light \
-        --ansi \
-        --bind ctrl-k:kill-line \
-        --bind alt-right:forward-word \
-        --bind alt-left:backward-word \
-        --preview-window up,70% \
-        "$@"
-}
+
+# Build fzf base options
+def fzf_base():
+    return [
+        "fzf",
+        "--layout",
+        "reverse",
+        "--info",
+        "hidden",
+        "--prompt",
+        " ",
+        "--color",
+        "light",
+        "--ansi",
+        "--bind",
+        "ctrl-k:kill-line",
+        "--bind",
+        "alt-right:forward-word",
+        "--bind",
+        "alt-left:backward-word",
+        "--preview-window",
+        "up,70%",
+    ]
+
 
 # Use --phony with start:reload to show initial results
 # Hack: to trigger display we append a space and then delete it on start
-if [[ "$MODE" == "command" ]]; then
+if MODE == "command":
     # Command mode - show command WITHOUT config args in query (they're shown in header)
     # This prevents duplication when switching modes
-    full_command="rg$rg_opts $pattern ${paths[*]}"
-    
-    # Show effective command including config in header
-    if [[ -n "$config_args" ]]; then
-        header="Config applied: $config_args"
-    else
-        header=""
-    fi
+    paths_str = " ".join(paths)
+    full_command = f"rg{rg_opts} {pattern} {paths_str}"
 
-    echo "" |
-    fzf -d: \
-        --query="$full_command " \
-        --phony \
-        --bind='start:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"${config_args:+ $config_args}"' '"$IMPLICIT_OPTS"'$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | '"$DELTA" \
-        --bind='start:backward-delete-char' \
-        --bind='change:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"${config_args:+ $config_args}"' '"$IMPLICIT_OPTS"'$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:'"${RIPGREP_CONFIG_PATH:+RIPGREP_CONFIG_PATH=\"$RIPGREP_CONFIG_PATH\"}"' rgi-switch-mode pattern {q}' \
-        --bind='enter:execute:open-in-editor {1} {2}' \
-        --header="$header" \
-        --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
-elif [[ "$MODE" == "pattern" ]]; then
+    # Show effective command including config in header
+    if config_args:
+        header = f"Config applied: {config_args}"
+    else:
+        header = ""
+
+    # Build the complex bind strings
+    config_insert = f" {config_args}" if config_args else ""
+
+    # start:reload and change:reload bindings
+    reload_cmd = f'cmd={{q}}; if [[ "$cmd" =~ ^rg ]]; then cmd="${{cmd#rg}}"; cmd="rg{config_insert} {IMPLICIT_OPTS}$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {DELTA}'
+
+    # tab:execute binding
+    ripgrep_env = (
+        f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
+    )
+    tab_execute = f"{ripgrep_env} rgi-switch-mode pattern {{q}}"
+
+    fzf_cmd = fzf_base() + [
+        "-d:",
+        "--query",
+        f"{full_command} ",
+        "--phony",
+        "--bind",
+        f"start:reload:{reload_cmd}",
+        "--bind",
+        "start:backward-delete-char",
+        "--bind",
+        f"change:reload:{reload_cmd}",
+        "--bind",
+        f"tab:execute:{tab_execute}",
+        "--bind",
+        "enter:execute:open-in-editor {1} {2}",
+        "--header",
+        header,
+        "--preview",
+        "[[ -n {1} ]] && rgi-preview {1} {2}",
+    ]
+
+elif MODE == "pattern":
     # Pattern mode - the query is just the search pattern
-    echo "" |
-    fzf -d: \
-        --query="$pattern " \
-        --phony \
-        --bind='start:reload:RIPGREP_CONFIG_PATH= '"$RG"' "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
-        --bind='start:backward-delete-char' \
-        --bind='change:reload:RIPGREP_CONFIG_PATH= '"$RG"' {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:'"${RIPGREP_CONFIG_PATH:+RIPGREP_CONFIG_PATH=\"$RIPGREP_CONFIG_PATH\"}"' rgi-switch-mode command {q} '"$rg_opts"' '"${paths[*]}"' ' \
-        --bind='enter:execute:open-in-editor {1} {2}' \
-        --header='rg'"${config_args:+ $config_args}$rg_opts"' {q} '"${paths[*]}" \
-        --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
-fi
+    paths_str = " ".join(paths)
+
+    # Build the bind strings
+    start_reload = (
+        f'RIPGREP_CONFIG_PATH= {RG} "{pattern}" {paths_str} 2>/dev/null | {DELTA}'
+    )
+    change_reload = f"RIPGREP_CONFIG_PATH= {RG} {{q}} {paths_str} 2>/dev/null | {DELTA}"
+
+    ripgrep_env = (
+        f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
+    )
+    tab_execute = f"{ripgrep_env} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
+
+    header = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
+
+    fzf_cmd = fzf_base() + [
+        "-d:",
+        "--query",
+        f"{pattern} ",
+        "--phony",
+        "--bind",
+        f"start:reload:{start_reload}",
+        "--bind",
+        "start:backward-delete-char",
+        "--bind",
+        f"change:reload:{change_reload}",
+        "--bind",
+        f"tab:execute:{tab_execute}",
+        "--bind",
+        "enter:execute:open-in-editor {1} {2}",
+        "--header",
+        header,
+        "--preview",
+        "[[ -n {1} ]] && rgi-preview {1} {2}",
+    ]
+else:
+    sys.exit(1)
+
+# Run fzf with empty input
+# Need to pipe echo "" | fzf, so we'll use subprocess but with shell=True
+# to preserve the exact bash behavior
+import shlex
+
+fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
+full_cmd = f'echo "" | {fzf_cmd_str}'
+sys.exit(subprocess.call(full_cmd, shell=True))
