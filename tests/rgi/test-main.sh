@@ -331,8 +331,10 @@ echo "func OtherFunction() {}" >> "$TEST_FIXTURE_DIR/test-spaces/workflow.go"
 # Pattern with space that should match only the first function
 PATTERN="func .*UpdateWorkflowExecutionAsActive"
 
-# Use test-interactive to properly capture the initial state
-output=$("$TEST_INTERACTIVE" "$SESSION" "$RGI_PATH --rgi-pattern-mode '$PATTERN' $TEST_FIXTURE_DIR/test-spaces" 2>&1 || true)
+# Start rgi with the pattern containing spaces
+tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode '$PATTERN' $TEST_FIXTURE_DIR/test-spaces" 2>/dev/null
+sleep 2  # Give time for search to run
+output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
 
 # Check that the pattern finds the correct result
 if echo "$output" | grep -q "SomeUpdateWorkflowExecutionAsActive"; then
@@ -341,12 +343,12 @@ else
     echo -e "${RED}FAIL${NC}"
     echo "  Expected: Pattern with spaces should find UpdateWorkflowExecutionAsActive"
     echo "  Pattern used: $PATTERN"
-    # Show what's in the query field
-    query_line=$(echo "$output" | grep "^ " | head -1 | sed 's/^[[:space:]]*//')
+    # Show what's in the query field (the line starting with a space after the prompt)
+    query_line=$(echo "$output" | grep "^[[:space:]]" | grep -v "^─" | head -1 | sed 's/^[[:space:]]*//')
     echo "  Query shown in fzf: [$query_line]"
-    # Check if pattern appears without quotes
-    if [[ "$query_line" == "func .*UpdateWorkflowExecutionAsActive" ]]; then
-        echo "  Problem: Pattern appears unquoted in query (should be quoted for spaces)"
+    # Check if results are shown
+    if ! echo "$output" | grep -q "workflow.go"; then
+        echo "  Problem: No results shown (pattern may be incorrectly formatted)"
     fi
     failed_count=$((failed_count + 1))
 fi
