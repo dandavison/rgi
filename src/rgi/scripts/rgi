@@ -60,6 +60,11 @@ if [[ -n "$RIPGREP_CONFIG_PATH" && -f "$RIPGREP_CONFIG_PATH" ]]; then
         if [[ -z "$line" || "$line" =~ ^# ]]; then
             continue
         fi
+        # If line doesn't start with -, wrap it in single quotes
+        # (config files don't need quotes, but shell commands do)
+        if [[ ! "$line" =~ ^- ]]; then
+            line="'$line'"
+        fi
         # Add each arg - they need to be properly spaced
         if [[ -n "$config_args" ]]; then
             config_args="$config_args $line"
