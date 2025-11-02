@@ -49,10 +49,10 @@ while [[ $# -gt 0 ]]; do paths+=("$1"); shift; done
 [[ ${#paths[@]} -eq 0 ]] && paths=(.)
 
 # Implicit options that are always applied but never shown
-IMPLICIT_OPTS="--follow -i --hidden -g '!.git/*' --json --color=always"
+IMPLICIT_OPTS="--json"
 
 # Commands  
-RG="rg $IMPLICIT_OPTS$rg_opts"
+RG="rg$rg_opts $IMPLICIT_OPTS"
 DELTA="delta --light --grep-output-type classic"
 
 # fzf wrapper
@@ -65,7 +65,7 @@ fzf() {
 # Use --phony with start:reload to show initial results
 # Hack: to trigger display we append a space and then delete it on start
 if [[ "$MODE" == "command" ]]; then
-    # Command mode - show the rg command without implicit options
+    # Command mode - show the full rg command (except --json)
     full_command="rg$rg_opts $pattern ${paths[*]}"
 
     echo "" |

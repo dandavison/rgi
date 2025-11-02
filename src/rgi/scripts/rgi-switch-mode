@@ -10,8 +10,8 @@ Where:
 - rg-opts: optional ripgrep options (e.g. -g, -t, etc.)
 - paths: optional paths to search (defaults to current directory)
 
-Note: Implicit options (--follow, -i, --hidden, -g '!.git/*', --json, --color=always)
-are automatically added by rgi and should never be passed or shown.
+Note: The --json option is automatically added by rgi for output formatting
+and should never be passed or shown in the UI.
 """
 
 import os
@@ -25,25 +25,25 @@ def parse_rg_command(cmd):
     """Parse an rg command string to extract pattern, options, and paths."""
 
     # Implicit options that should never be shown or passed (rgi adds them automatically)
-    IMPLICIT_OPTIONS = ["--follow", "-i", "--hidden", "-g", "!.git/*", "--json", "--color=always", "--color"]
+    IMPLICIT_OPTIONS = ["--json", "--color=always", "--color"]
 
     # Find the pattern in the command
     # First try to find --json (for backward compatibility)
     json_match = re.search(r"--json\s+", cmd)
-    
+
     if json_match:
         # Old format with explicit --json
         json_pos = json_match.start()
-        
+
         # Extract the part between 'rg' and '--json' for options
         rg_match = re.search(r"\brg\s+", cmd)
         if rg_match:
             options_part = cmd[rg_match.end() : json_pos].strip()
         else:
             options_part = ""
-            
+
         # Pattern comes after --json
-        after_json = cmd[json_match.end():].strip()
+        after_json = cmd[json_match.end() :].strip()
     else:
         # New format without explicit --json
         # Parse the command: rg [options] pattern [paths]
@@ -51,21 +51,22 @@ def parse_rg_command(cmd):
         if not rg_match:
             # No 'rg' found, treat whole thing as pattern
             return cmd.strip(), "", "."
-        
-        after_rg = cmd[rg_match.end():].strip()
-        
+
+        after_rg = cmd[rg_match.end() :].strip()
+
         # Split into tokens, handling quoted strings
         import shlex
+
         try:
             tokens = shlex.split(after_rg)
         except:
             tokens = after_rg.split()
-        
+
         # Separate options from pattern and paths
         options = []
         pattern = ""
         paths = []
-        
+
         i = 0
         while i < len(tokens):
             token = tokens[i]
@@ -73,7 +74,16 @@ def parse_rg_command(cmd):
                 # It's an option
                 options.append(token)
                 # Check if this option takes a value
-                if token in ["-g", "--glob", "-t", "--type", "-e", "--regexp", "-f", "--file"]:
+                if token in [
+                    "-g",
+                    "--glob",
+                    "-t",
+                    "--type",
+                    "-e",
+                    "--regexp",
+                    "-f",
+                    "--file",
+                ]:
                     if i + 1 < len(tokens):
                         options.append(tokens[i + 1])
                         i += 1
@@ -84,17 +94,13 @@ def parse_rg_command(cmd):
                 # Rest are paths
                 paths.append(token)
             i += 1
-        
+
         options_part = " ".join(options)
         after_json = pattern + " " + " ".join(paths) if paths else pattern
 
     # Remove implicit options from the options part
     for implicit in IMPLICIT_OPTIONS:
-        # Handle both flag-only and flag-with-value cases
-        if implicit.startswith("-g"):
-            # Special handling for glob patterns
-            options_part = re.sub(r"-g\s+['\"]?!\.git/\*['\"]?\s*", "", options_part)
-        elif implicit in ["--color=always"]:
+        if implicit in ["--color=always"]:
             # Remove --color=always specifically
             options_part = re.sub(r"--color=always\s*", "", options_part)
         else:

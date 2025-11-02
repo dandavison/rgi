@@ -161,11 +161,12 @@ tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch back to pattern mode
 sleep 1.5
 output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
 
-if echo "$output" | grep -q "rg.*TODO"; then
+# In pattern mode, the header shows "rg {q} ." and the query line shows "TODO"
+if echo "$output" | grep -q "rg.*{q}" && echo "$output" | grep -q "TODO"; then
     echo -e "${GREEN}PASS${NC}"
 else
     echo -e "${RED}FAIL${NC}"
-    echo "  Expected: rg command header with pattern"
+    echo "  Expected: Pattern mode with 'rg {q}' header and TODO in query"
     failed_count=$((failed_count + 1))
 fi
 
