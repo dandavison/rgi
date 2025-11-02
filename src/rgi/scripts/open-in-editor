@@ -1,0 +1,29 @@
+#!/bin/bash
+
+file="$1"
+line="$2"
+editor="${RGI_EDITOR:-${EDITOR:-vscode}}"
+
+case "$editor" in
+    idea|intellij)
+        open "idea://open?file=$file&line=$line"
+        ;;
+    vscode|code)
+        open "vscode://file/$file:$line"
+        ;;
+    cursor)
+        open "cursor://file/$file:$line"
+        ;;
+    wormhole)
+        wormhole "$file":"$line"
+        ;;
+    *)
+        if command -v "$editor" >/dev/null 2>&1; then
+            "$editor" "+$line" "$file"
+        else
+            echo "Error: Unknown editor '$editor'. Set RGI_EDITOR or EDITOR to one of:" >&2
+            echo "idea, vscode, cursor, wormhole" >&2
+            exit 1
+        fi
+        ;;
+esac
