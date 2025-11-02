@@ -318,6 +318,42 @@ fi
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
+# Test 16: Patterns with spaces work correctly
+test_count=$((test_count + 1))
+echo -n "Test $test_count: Patterns with spaces work correctly... "
+
+SESSION="test-spaces-$$"
+# Create a file with the target pattern
+mkdir -p "$TEST_FIXTURE_DIR/test-spaces"
+echo "func SomeUpdateWorkflowExecutionAsActive() {}" > "$TEST_FIXTURE_DIR/test-spaces/workflow.go"
+echo "func OtherFunction() {}" >> "$TEST_FIXTURE_DIR/test-spaces/workflow.go"
+
+# Pattern with space that should match only the first function
+PATTERN="func .*UpdateWorkflowExecutionAsActive"
+
+# Use test-interactive to properly capture the initial state
+output=$("$TEST_INTERACTIVE" "$SESSION" "$RGI_PATH --rgi-pattern-mode '$PATTERN' $TEST_FIXTURE_DIR/test-spaces" 2>&1 || true)
+
+# Check that the pattern finds the correct result
+if echo "$output" | grep -q "SomeUpdateWorkflowExecutionAsActive"; then
+    echo -e "${GREEN}PASS${NC}"
+else
+    echo -e "${RED}FAIL${NC}"
+    echo "  Expected: Pattern with spaces should find UpdateWorkflowExecutionAsActive"
+    echo "  Pattern used: $PATTERN"
+    # Show what's in the query field
+    query_line=$(echo "$output" | grep "^ " | head -1 | sed 's/^[[:space:]]*//')
+    echo "  Query shown in fzf: [$query_line]"
+    # Check if pattern appears without quotes
+    if [[ "$query_line" == "func .*UpdateWorkflowExecutionAsActive" ]]; then
+        echo "  Problem: Pattern appears unquoted in query (should be quoted for spaces)"
+    fi
+    failed_count=$((failed_count + 1))
+fi
+
+tmux kill-session -t "$SESSION" 2>/dev/null || true
+rm -rf "$TEST_FIXTURE_DIR/test-spaces"
+
 echo
 echo "=== Results ==="
 echo "Total tests: $test_count"
