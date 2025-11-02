@@ -75,27 +75,27 @@ echo
 
 # Test 1: Basic search
 run_test "Basic pattern search" \
-    "$RGI_PATH TODO ." \
+    "$RGI_PATH --rgi-pattern-mode TODO ." \
     "TODO"
 
 # Test 2: Search with specific path
 run_test "Search in specific directory" \
-    "$RGI_PATH TODO shell-config" \
+    "$RGI_PATH --rgi-pattern-mode TODO shell-config" \
     "lib_prompt.sh"
 
 # Test 3: Multiple paths
 run_test "Search in multiple paths" \
-    "$RGI_PATH function src docs" \
+    "$RGI_PATH --rgi-pattern-mode function src docs" \
     "function"
 
 # Test 4: Search with glob filter
 run_test "Search with glob filter for Python files" \
-    "$RGI_PATH -g '*.py' test ." \
+    "$RGI_PATH --rgi-pattern-mode -g '*.py' test ." \
     "\.py"
 
 # Test 5: Custom option --real-code-only
 run_test "Search with --real-code-only option" \
-    "$RGI_PATH --real-code-only TODO ." \
+    "$RGI_PATH --rgi-pattern-mode --real-code-only TODO ." \
     "TODO"
 
 echo
@@ -104,12 +104,12 @@ echo
 
 # Test 6: Check if fzf UI loads
 run_test "FZF UI renders correctly" \
-    "$RGI_PATH test ." \
+    "$RGI_PATH --rgi-pattern-mode test ." \
     "─────"
 
 # Test 7: Check preview window border  
 run_test "Preview window displays" \
-    "$RGI_PATH function src" \
+    "$RGI_PATH --rgi-pattern-mode function src" \
     "╭─"
 
 echo
@@ -121,7 +121,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Tab switches to command mode... "
 
 SESSION="test-tab-$$"
-tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode TODO ." 2>/dev/null
 sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null
 sleep 1.5
@@ -145,7 +145,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Tab toggles back to pattern mode... "
 
 SESSION="test-toggle-$$"
-tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode TODO ." 2>/dev/null
 sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
 sleep 1.5
@@ -169,7 +169,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Typing in command mode shows results... "
 
 SESSION="test-type-$$"
-tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode TODO ." 2>/dev/null
 sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
 sleep 1.5
@@ -193,7 +193,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Editing command in command mode updates results... "
 
 SESSION="test-edit-$$"
-tmux new-session -d -s "$SESSION" "$RGI_PATH test ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode test ." 2>/dev/null
 sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
 sleep 1.5
@@ -218,7 +218,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Path changes are retained when switching modes... "
 
 SESSION="test-path-retention-$$"
-tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode TODO ." 2>/dev/null
 sleep 1.5
 # Switch to command mode
 tmux send-keys -t "$SESSION" Tab 2>/dev/null
@@ -250,7 +250,7 @@ test_count=$((test_count + 1))
 echo -n "Test $test_count: Glob patterns are retained when switching modes... "
 
 SESSION="test-glob-retention-$$"
-tmux new-session -d -s "$SESSION" "$RGI_PATH test ." 2>/dev/null
+tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode test ." 2>/dev/null
 sleep 1.5
 # Switch to command mode
 tmux send-keys -t "$SESSION" Tab 2>/dev/null

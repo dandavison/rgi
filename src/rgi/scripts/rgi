@@ -21,26 +21,34 @@ paths=()
 rg_opts=""
 MODE="command"
 
-# Check for command mode flag
-if [[ "$1" == "--rgi-command-mode" ]]; then
-    MODE="command"
-    shift
-fi
-if [[ "$1" == "--rgi-pattern-mode" ]]; then
-    MODE="pattern"
-    shift
-fi
+# First pass: check for mode flags anywhere in arguments
+for arg in "$@"; do
+    if [[ "$arg" == "--rgi-command-mode" ]]; then
+        MODE="command"
+    elif [[ "$arg" == "--rgi-pattern-mode" ]]; then
+        MODE="pattern"
+    fi
+done
 
-# Collect options
-while [[ $# -gt 0 && "$1" =~ ^- ]]; do
-    opt="$1"
-    rg_opts+=" $opt"
-    shift
-    case "$opt" in
-        -g|--glob|-t|--type|-e|--regexp)
-            [[ $# -gt 0 ]] && rg_opts+=" '$1'" && shift
-            ;;
-    esac
+# Now process arguments, skipping mode flags
+while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--rgi-command-mode" ]] || [[ "$1" == "--rgi-pattern-mode" ]]; then
+        shift
+        continue
+    fi
+    
+    if [[ "$1" =~ ^- ]]; then
+        opt="$1"
+        rg_opts+=" $opt"
+        shift
+        case "$opt" in
+            -g|--glob|-t|--type|-e|--regexp)
+                [[ $# -gt 0 ]] && rg_opts+=" '$1'" && shift
+                ;;
+        esac
+    else
+        break
+    fi
 done
 
 # Pattern and paths
