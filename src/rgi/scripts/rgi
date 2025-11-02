@@ -56,14 +56,6 @@ if len(paths) == 0:
     paths = ["."]
 
 
-# Helper function to quote pattern if it contains spaces
-def quote_if_spaces(s):
-    """Quote a string if it contains spaces, for use in shell commands and fzf queries"""
-    if " " in s:
-        return f"'{s}'"
-    return s
-
-
 # Parse ripgrep config file if RIPGREP_CONFIG_PATH is set
 # We'll include these args explicitly rather than relying on ripgrep to read them
 config_args = ""
@@ -127,8 +119,8 @@ if MODE == "command":
     # Command mode - show command WITHOUT config args in query (they're shown in header)
     # This prevents duplication when switching modes
     paths_str = " ".join(paths)
-    # Quote pattern if it contains spaces
-    quoted_pattern = quote_if_spaces(pattern) if pattern else ""
+    # Quote pattern for shell safety (shlex.quote handles spaces and special chars)
+    quoted_pattern = shlex.quote(pattern) if pattern else ""
     full_command = f"rg{rg_opts} {quoted_pattern} {paths_str}"
 
     # Show effective command including config in header
@@ -174,8 +166,8 @@ elif MODE == "pattern":
     # Pattern mode - the query is just the search pattern
     paths_str = " ".join(paths)
 
-    # Quote pattern for display in fzf query if it contains spaces
-    query_pattern = quote_if_spaces(pattern) if pattern else ""
+    # Quote pattern for display in fzf query (shlex.quote handles spaces and special chars)
+    query_pattern = shlex.quote(pattern) if pattern else ""
 
     # Build the bind strings
     # For start_reload, always quote the pattern for shell safety
