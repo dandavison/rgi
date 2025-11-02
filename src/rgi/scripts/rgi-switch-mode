@@ -25,7 +25,7 @@ def parse_rg_command(cmd):
     """Parse an rg command string to extract pattern, options, and paths."""
 
     # Implicit options that should never be shown or passed (rgi adds them automatically)
-    IMPLICIT_OPTIONS = ["--json", "--color=always", "--color"]
+    IMPLICIT_OPTIONS = ["--json"]
 
     # Find the pattern in the command
     # First try to find --json (for backward compatibility)
@@ -100,11 +100,7 @@ def parse_rg_command(cmd):
 
     # Remove implicit options from the options part
     for implicit in IMPLICIT_OPTIONS:
-        if implicit in ["--color=always"]:
-            # Remove --color=always specifically
-            options_part = re.sub(r"--color=always\s*", "", options_part)
-        else:
-            options_part = re.sub(rf"\b{re.escape(implicit)}\b\s*", "", options_part)
+        options_part = re.sub(rf"\b{re.escape(implicit)}\b\s*", "", options_part)
 
     # Clean up extra spaces
     options_part = " ".join(options_part.split())
