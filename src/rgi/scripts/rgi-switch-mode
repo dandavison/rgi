@@ -18,7 +18,7 @@ from pathlib import Path
 def parse_rg_command(cmd):
     """Parse an rg command string to extract pattern, options, and paths."""
     
-    # Default options that are always included (and thus hidden from display)
+    # Default options that are always included
     DEFAULT_OPTIONS = ['--follow', '-i', '--hidden', '-g', '!.git/*']
     
     # Find --json in the command

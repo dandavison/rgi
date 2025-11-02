@@ -48,8 +48,8 @@ done
 while [[ $# -gt 0 ]]; do paths+=("$1"); shift; done
 [[ ${#paths[@]} -eq 0 ]] && paths=(.)
 
-# Commands
-RG="rg --follow -i --hidden -g '!.git/*'$rg_opts --json --color=always"
+# Commands  
+RG="rg --follow -i --hidden -g '!.git/*'$rg_opts --color=always"
 DELTA="delta --light --grep-output-type classic"
 
 # fzf wrapper
@@ -60,17 +60,17 @@ fzf() {
 }
 
 if [[ "$MODE" == "command" ]]; then
-    # Command mode - the query IS the full rg command (without implicit options)
-    full_command="rg$rg_opts --json $pattern ${paths[*]}"
+    # Command mode - show the full rg command
+    full_command="rg --follow -i --hidden -g '!.git/*'$rg_opts --json $pattern ${paths[*]}"
 
     # Hack: to trigger display we append a space and then delete it on start
     echo "" |
     fzf -d: \
         --query="$full_command " \
         --phony \
-        --bind='start:reload:'"$RG"' "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:eval {q} 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:eval {q} --follow -i --hidden -g "!.git/*" 2>/dev/null | '"$DELTA" \
+        --bind='change:reload:eval {q} 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:rgi-switch-mode {q}' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
@@ -82,9 +82,9 @@ elif [[ "$MODE" == "pattern" ]]; then
     fzf -d: \
         --query="$pattern " \
         --phony \
-        --bind='start:reload:'"$RG"' "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:'"$RG"' --json "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:'"$RG"' {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='change:reload:'"$RG"' --json {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:kill -TERM $PPID 2>/dev/null; '"$SCRIPT_PATH"' '"$rg_opts"' --rgi-command-mode "{q}" '"${paths[*]}" \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --header='rg'"$rg_opts"' {q} '"${paths[*]}" \
