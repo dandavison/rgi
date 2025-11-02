@@ -100,22 +100,27 @@ fzf() {
 # Use --phony with start:reload to show initial results
 # Hack: to trigger display we append a space and then delete it on start
 if [[ "$MODE" == "command" ]]; then
-    # Command mode - show the full rg command including config args
+    # Command mode - show command WITHOUT config args in query (they're shown in header)
+    # This prevents duplication when switching modes
+    full_command="rg$rg_opts $pattern ${paths[*]}"
+    
+    # Show effective command including config in header
     if [[ -n "$config_args" ]]; then
-        full_command="rg $config_args$rg_opts $pattern ${paths[*]}"
+        header="Config applied: $config_args"
     else
-        full_command="rg$rg_opts $pattern ${paths[*]}"
+        header=""
     fi
 
     echo "" |
     fzf -d: \
         --query="$full_command " \
         --phony \
-        --bind='start:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"$IMPLICIT_OPTS"'$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"${config_args:+ $config_args}"' '"$IMPLICIT_OPTS"'$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"$IMPLICIT_OPTS"'$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | '"$DELTA" \
+        --bind='change:reload:cmd={q}; if [[ "$cmd" =~ ^rg ]]; then cmd="${cmd#rg}"; cmd="rg '"${config_args:+ $config_args}"' '"$IMPLICIT_OPTS"'$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:'"${RIPGREP_CONFIG_PATH:+RIPGREP_CONFIG_PATH=\"$RIPGREP_CONFIG_PATH\"}"' rgi-switch-mode pattern {q} '"$rg_opts"' '"${paths[*]}"' ' \
         --bind='enter:execute:open-in-editor {1} {2}' \
+        --header="$header" \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 elif [[ "$MODE" == "pattern" ]]; then
     # Pattern mode - the query is just the search pattern
