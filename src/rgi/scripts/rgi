@@ -5,64 +5,132 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Debug logging (disabled for now)
-# with open("/tmp/rgi-debug.log", "a") as f:
-#     f.write(f"rgi started with args: {sys.argv}\n")
 
-# Get absolute path to this script
-SCRIPT_PATH = str(Path(__file__).resolve())
+def main():
+    """Main entry point for rgi."""
+    # Debug logging (disabled for now)
+    # with open("/tmp/rgi-debug.log", "a") as f:
+    #     f.write(f"rgi started with args: {sys.argv}\n")
 
-# Get directory containing this script
-SCRIPT_DIR = str(Path(SCRIPT_PATH).parent)
+    # Get absolute path to this script
+    SCRIPT_PATH = str(Path(__file__).resolve())
 
-# Add script directory to PATH so rgi-preview can be found
-os.environ["PATH"] = f"{SCRIPT_DIR}:{os.environ.get('PATH', '')}"
+    # Get directory containing this script
+    SCRIPT_DIR = str(Path(SCRIPT_PATH).parent)
 
-# Parse arguments
-pattern = ""
-paths = []
-rg_opts = ""
-MODE = "command"
+    # Add script directory to PATH so rgi-preview can be found
+    os.environ["PATH"] = f"{SCRIPT_DIR}:{os.environ.get('PATH', '')}"
 
-# Single pass through arguments
-argv = sys.argv[1:]  # Skip script name
-i = 0
-while i < len(argv):
-    if argv[i] == "--rgi-command-mode":
-        MODE = "command"
-        i += 1
-    elif argv[i] == "--rgi-pattern-mode":
-        MODE = "pattern"
-        i += 1
-    elif argv[i].startswith("-"):
-        opt = argv[i]
-        rg_opts += f" {opt}"
-        i += 1
-        if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"]:
-            if i < len(argv):
-                rg_opts += f" '{argv[i]}'"
-                i += 1
+    # Parse command line arguments
+    mode, pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
+
+    # Parse ripgrep config file
+    RIPGREP_CONFIG_PATH = os.environ.get("RIPGREP_CONFIG_PATH", "")
+    config_args = parse_ripgrep_config(RIPGREP_CONFIG_PATH)
+
+    # Implicit options that are always applied but never shown
+    IMPLICIT_OPTS = "--json"
+
+    # Commands
+    # Include config args explicitly (not via RIPGREP_CONFIG_PATH to avoid double application)
+    config_part = f" {config_args}" if config_args else ""
+    RG = f"rg{config_part}{rg_opts} {IMPLICIT_OPTS}"
+    DELTA = "delta --grep-output-type classic"
+
+    # Build fzf command based on mode
+    if mode == "command":
+        fzf_cmd = build_command_mode_fzf(
+            pattern,
+            paths,
+            rg_opts,
+            config_args,
+            RG,
+            DELTA,
+            RIPGREP_CONFIG_PATH,
+            IMPLICIT_OPTS,
+        )
+    elif mode == "pattern":
+        fzf_cmd = build_pattern_mode_fzf(
+            pattern, paths, rg_opts, config_args, RG, DELTA, RIPGREP_CONFIG_PATH
+        )
     else:
-        break
+        sys.exit(1)
 
-# Pattern and paths
-if i < len(argv):
-    pattern = argv[i]
-    i += 1
-while i < len(argv):
-    paths.append(argv[i])
-    i += 1
-if len(paths) == 0:
-    paths = ["."]
+    # Run fzf with empty input
+    # Need to pipe echo "" | fzf, so we'll use subprocess but with shell=True
+    # to preserve the exact bash behavior
+    fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
+    full_cmd = f'echo "" | {fzf_cmd_str}'
+    sys.exit(subprocess.call(full_cmd, shell=True))
 
 
-# Parse ripgrep config file if RIPGREP_CONFIG_PATH is set
-# We'll include these args explicitly rather than relying on ripgrep to read them
-config_args = ""
-RIPGREP_CONFIG_PATH = os.environ.get("RIPGREP_CONFIG_PATH", "")
-if RIPGREP_CONFIG_PATH and os.path.isfile(RIPGREP_CONFIG_PATH):
-    # Parse the config file - each non-comment line is an argument
-    with open(RIPGREP_CONFIG_PATH, "r") as f:
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def parse_arguments(argv):
+    """Parse command line arguments for rgi.
+
+    Returns:
+        tuple: (mode, pattern, paths, rg_opts)
+            - mode: "command" or "pattern"
+            - pattern: search pattern string
+            - paths: list of paths to search
+            - rg_opts: ripgrep options string
+    """
+    pattern = ""
+    paths = []
+    rg_opts = ""
+    mode = "command"  # default mode
+
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--rgi-command-mode":
+            mode = "command"
+            i += 1
+        elif argv[i] == "--rgi-pattern-mode":
+            mode = "pattern"
+            i += 1
+        elif argv[i].startswith("-"):
+            opt = argv[i]
+            rg_opts += f" {opt}"
+            i += 1
+            # Handle options that take arguments
+            if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"]:
+                if i < len(argv):
+                    rg_opts += f" '{argv[i]}'"
+                    i += 1
+        else:
+            break
+
+    # Pattern and paths
+    if i < len(argv):
+        pattern = argv[i]
+        i += 1
+    while i < len(argv):
+        paths.append(argv[i])
+        i += 1
+    if len(paths) == 0:
+        paths = ["."]
+
+    return mode, pattern, paths, rg_opts
+
+
+def parse_ripgrep_config(config_path):
+    """Parse ripgrep configuration file.
+
+    Args:
+        config_path: Path to ripgrep config file from RIPGREP_CONFIG_PATH env var
+
+    Returns:
+        str: Space-separated string of config arguments, or empty string
+    """
+    if not config_path or not os.path.isfile(config_path):
+        return ""
+
+    config_args = ""
+    with open(config_path, "r") as f:
         for line in f:
             # Trim leading/trailing whitespace
             line = line.strip()
@@ -79,18 +147,11 @@ if RIPGREP_CONFIG_PATH and os.path.isfile(RIPGREP_CONFIG_PATH):
             else:
                 config_args = line
 
-# Implicit options that are always applied but never shown
-IMPLICIT_OPTS = "--json"
-
-# Commands
-# Include config args explicitly (not via RIPGREP_CONFIG_PATH to avoid double application)
-config_part = f" {config_args}" if config_args else ""
-RG = f"rg{config_part}{rg_opts} {IMPLICIT_OPTS}"
-DELTA = "delta --grep-output-type classic"
+    return config_args
 
 
-# Build fzf base options
 def fzf_base():
+    """Build base fzf options common to all modes."""
     return [
         "fzf",
         "--layout",
@@ -113,9 +174,24 @@ def fzf_base():
     ]
 
 
-# Use --phony with start:reload to show initial results
-# Hack: to trigger display we append a space and then delete it on start
-if MODE == "command":
+def build_command_mode_fzf(
+    pattern, paths, rg_opts, config_args, RG, DELTA, RIPGREP_CONFIG_PATH, IMPLICIT_OPTS
+):
+    """Build fzf command for command mode.
+
+    Args:
+        pattern: Search pattern
+        paths: List of paths to search
+        rg_opts: Ripgrep options
+        config_args: Arguments from config file
+        RG: Full ripgrep command with config and implicit opts
+        DELTA: Delta command for formatting
+        RIPGREP_CONFIG_PATH: Path to ripgrep config file
+        IMPLICIT_OPTS: Implicit options like --json
+
+    Returns:
+        list: Complete fzf command as list of arguments
+    """
     # Command mode - show command WITHOUT config args in query (they're shown in header)
     # This prevents duplication when switching modes
     paths_str = " ".join(paths)
@@ -141,7 +217,7 @@ if MODE == "command":
     )
     tab_execute = f"{ripgrep_env} rgi-switch-mode pattern {{q}}"
 
-    fzf_cmd = fzf_base() + [
+    return fzf_base() + [
         "-d:",
         "--query",
         f"{full_command} ",
@@ -162,7 +238,24 @@ if MODE == "command":
         "[[ -n {1} ]] && rgi-preview {1} {2}",
     ]
 
-elif MODE == "pattern":
+
+def build_pattern_mode_fzf(
+    pattern, paths, rg_opts, config_args, RG, DELTA, RIPGREP_CONFIG_PATH
+):
+    """Build fzf command for pattern mode.
+
+    Args:
+        pattern: Search pattern
+        paths: List of paths to search
+        rg_opts: Ripgrep options
+        config_args: Arguments from config file
+        RG: Full ripgrep command with config and implicit opts
+        DELTA: Delta command for formatting
+        RIPGREP_CONFIG_PATH: Path to ripgrep config file
+
+    Returns:
+        list: Complete fzf command as list of arguments
+    """
     # Pattern mode - the query is just the search pattern
     paths_str = " ".join(paths)
 
@@ -181,7 +274,7 @@ elif MODE == "pattern":
 
     header = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
 
-    fzf_cmd = fzf_base() + [
+    return fzf_base() + [
         "-d:",
         "--query",
         f"{query_pattern} ",
@@ -201,12 +294,7 @@ elif MODE == "pattern":
         "--preview",
         "[[ -n {1} ]] && rgi-preview {1} {2}",
     ]
-else:
-    sys.exit(1)
 
-# Run fzf with empty input
-# Need to pipe echo "" | fzf, so we'll use subprocess but with shell=True
-# to preserve the exact bash behavior
-fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
-full_cmd = f'echo "" | {fzf_cmd_str}'
-sys.exit(subprocess.call(full_cmd, shell=True))
+
+if __name__ == "__main__":
+    main()
