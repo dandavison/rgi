@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""
+Switch from command mode to pattern mode by parsing the current command.
+Takes the full rg command string from fzf's {q} and extracts:
+- Pattern (what comes after --json)
+- Options (everything between rg and --json, minus defaults)
+- Paths (everything after the pattern)
+Then restarts rgi in pattern mode with the extracted parameters.
+"""
+
+import sys
+import os
+import re
+import signal
+import subprocess
+from pathlib import Path
+
+def parse_rg_command(cmd):
+    """Parse an rg command string to extract pattern, options, and paths."""
+    
+    # Default options that are always included (and thus hidden from display)
+    DEFAULT_OPTIONS = ['--follow', '-i', '--hidden', '-g', '!.git/*']
+    
+    # Find --json in the command
+    json_match = re.search(r'--json\s+', cmd)
+    if not json_match:
+        # If no --json found, the whole thing after 'rg' is the pattern
+        pattern_part = re.sub(r'^.*?rg\s+', '', cmd).strip()
+        return pattern_part, '', '.'
+    
+    json_pos = json_match.start()
+    
+    # Extract the part between 'rg' and '--json' for options
+    rg_match = re.search(r'\brg\s+', cmd)
+    if rg_match:
+        options_part = cmd[rg_match.end():json_pos].strip()
+    else:
+        options_part = ''
+    
+    # Remove default options from the options part
+    for default in DEFAULT_OPTIONS:
+        # Handle both flag-only and flag-with-value cases
+        if default.startswith('-g'):
+            # Special handling for glob patterns
+            options_part = re.sub(r"-g\s+['\"]?!\.git/\*['\"]?\s*", '', options_part)
+        else:
+            options_part = re.sub(rf'\b{re.escape(default)}\b\s*', '', options_part)
+    
+    # Clean up extra spaces
+    options_part = ' '.join(options_part.split())
+    
+    # Extract pattern (first token after --json)
+    after_json = cmd[json_match.end():].strip()
+    
+    # Pattern might be quoted
+    if after_json.startswith('"'):
+        pattern_match = re.match(r'"([^"]*)"', after_json)
+        if pattern_match:
+            pattern = pattern_match.group(1)
+            after_pattern = after_json[pattern_match.end():].strip()
+        else:
+            pattern = after_json.strip('"')
+            after_pattern = ''
+    elif after_json.startswith("'"):
+        pattern_match = re.match(r"'([^']*)'", after_json)
+        if pattern_match:
+            pattern = pattern_match.group(1)
+            after_pattern = after_json[pattern_match.end():].strip()
+        else:
+            pattern = after_json.strip("'")
+            after_pattern = ''
+    else:
+        # Unquoted pattern - take first word
+        parts = after_json.split(None, 1)
+        pattern = parts[0] if parts else ''
+        after_pattern = parts[1] if len(parts) > 1 else ''
+    
+    # Paths are everything after the pattern
+    paths = after_pattern.strip() if after_pattern else '.'
+    
+    return pattern, options_part, paths
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: rgi-switch-mode <command-string>", file=sys.stderr)
+        sys.exit(1)
+    
+    cmd = sys.argv[1]
+    pattern, options, paths = parse_rg_command(cmd)
+    
+    # Kill parent fzf process
+    try:
+        os.kill(os.getppid(), signal.SIGTERM)
+    except:
+        pass
+    
+    # Get the rgi script path (same directory as this script)
+    script_dir = Path(__file__).parent
+    rgi_path = script_dir / "rgi"
+    
+    # Build the new rgi command
+    args = [str(rgi_path)]
+    
+    # Add extracted options if any
+    if options:
+        # Split options properly, respecting quotes
+        import shlex
+        args.extend(shlex.split(options))
+    
+    # Add pattern mode flag
+    args.append('--rgi-pattern-mode')
+    
+    # Add pattern and paths
+    args.append(pattern)
+    
+    # Add paths
+    if paths and paths != '.':
+        args.extend(paths.split())
+    else:
+        args.append('.')
+    
+    # Execute the new rgi instance
+    os.execvp(args[0], args)
+
+if __name__ == '__main__':
+    main()

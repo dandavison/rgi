@@ -153,7 +153,7 @@ tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch back to pattern mode
 sleep 1.5
 output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
 
-if echo "$output" | grep -q "rg --follow" && \
+if echo "$output" | grep -q "^[[:space:]]*rg" && \
    ! echo "$output" | grep -q "rg.*--json"; then
     echo -e "${GREEN}PASS${NC}"
 else
@@ -239,7 +239,7 @@ if echo "$output" | grep -q "rg.*shell-config"; then
 else
     echo -e "${RED}FAIL${NC}"
     echo "  Expected: rg command header should show 'shell-config' after editing in command mode"
-    echo "  Got: $(echo "$output" | grep "rg --follow" | head -1)"
+    echo "  Got: $(echo "$output" | grep "^[[:space:]]*rg" | head -1)"
     failed_count=$((failed_count + 1))
 fi
 
@@ -272,7 +272,7 @@ if echo "$output" | grep -q "rg.*-g.*!\\*\\.html"; then
 else
     echo -e "${RED}FAIL${NC}"
     echo "  Expected: rg command header should show '-g !*.html' after editing in command mode"
-    echo "  Got: $(echo "$output" | grep "rg --follow" | head -1)"
+    echo "  Got: $(echo "$output" | grep "^[[:space:]]*rg" | head -1)"
     failed_count=$((failed_count + 1))
 fi
 

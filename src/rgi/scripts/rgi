@@ -49,7 +49,7 @@ while [[ $# -gt 0 ]]; do paths+=("$1"); shift; done
 [[ ${#paths[@]} -eq 0 ]] && paths=(.)
 
 # Commands
-RG="rg --follow -i --hidden -g '!.git/*'$rg_opts --color=always"
+RG="rg --follow -i --hidden -g '!.git/*'$rg_opts --json --color=always"
 DELTA="delta --light --grep-output-type classic"
 
 # fzf wrapper
@@ -60,36 +60,18 @@ fzf() {
 }
 
 if [[ "$MODE" == "command" ]]; then
-    # Command mode - the query IS the full rg command
-    full_command="rg --follow -i --hidden -g '!.git/*'$rg_opts --json $pattern ${paths[*]}"
+    # Command mode - the query IS the full rg command (without implicit options)
+    full_command="rg$rg_opts --json $pattern ${paths[*]}"
 
     # Hack: to trigger display we append a space and then delete it on start
     echo "" |
     fzf -d: \
         --query="$full_command " \
         --phony \
-        --bind='start:reload:'"$RG"' --json "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:'"$RG"' "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:eval {q} 2>/dev/null | '"$DELTA" \
-        --bind='tab:execute:
-            # Extract the pattern, options, and paths from the edited command
-            cmd="{q}"
-            # Extract everything between rg and --json as options
-            OPTIONS=$(echo "$cmd" | sed -E "s/^[^ ]+ +(.*)--json.*/\1/" | sed "s/--follow -i --hidden -g '\''!.git\/\*'\''//")
-            # Simple extraction - get word after --json, strip quotes and backslashes
-            PATTERN=$(echo "$cmd" | sed -E "s/.*--json +([^ ]+).*/\1/;s/[\"'\''\\\\]//g")
-            # Extract paths - everything after the pattern
-            # First remove everything up to and including the pattern, and strip quotes
-            AFTER_PATTERN=$(echo "$cmd" | sed -E "s/.*--json +[^ ]+ *//;s/^[\"'\'']//;s/[\"'\'']$//")
-            if [[ -n "$AFTER_PATTERN" ]]; then
-                PATHS="$AFTER_PATTERN"
-            else
-                PATHS="${paths[*]}"
-            fi
-            # Kill parent fzf and start new instance
-            # echo "cmd=[$cmd] PATTERN=[$PATTERN] OPTIONS=[$OPTIONS] PATHS=[$PATHS]" >> /tmp/rgi-debug.log
-            kill -TERM $PPID 2>/dev/null
-            '"$SCRIPT_PATH"' $OPTIONS --rgi-pattern-mode "$PATTERN" $PATHS' \
+        --bind='change:reload:eval {q} --follow -i --hidden -g "!.git/*" 2>/dev/null | '"$DELTA" \
+        --bind='tab:execute:rgi-switch-mode {q}' \
         --bind='enter:execute:open-in-editor {1} {2}' \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 elif [[ "$MODE" == "pattern" ]]; then
@@ -100,11 +82,11 @@ elif [[ "$MODE" == "pattern" ]]; then
     fzf -d: \
         --query="$pattern " \
         --phony \
-        --bind='start:reload:'"$RG"' --json "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='start:reload:'"$RG"' "'"$pattern"'" '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='start:backward-delete-char' \
-        --bind='change:reload:'"$RG"' --json {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
+        --bind='change:reload:'"$RG"' {q} '"${paths[*]}"' 2>/dev/null | '"$DELTA" \
         --bind='tab:execute:kill -TERM $PPID 2>/dev/null; '"$SCRIPT_PATH"' '"$rg_opts"' --rgi-command-mode "{q}" '"${paths[*]}" \
         --bind='enter:execute:open-in-editor {1} {2}' \
-        --header='rg --follow -i --hidden -g "!.git/*"'"$rg_opts"' --color=always {q} '"${paths[*]}" \
+        --header='rg'"$rg_opts"' {q} '"${paths[*]}" \
         --preview="[[ -n {1} ]] && rgi-preview {1} {2}"
 fi
