@@ -308,3 +308,50 @@ def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path, test_i
         # Kill the session
         subprocess.run(["tmux", "kill-session", "-t", session_name], 
                       capture_output=True, timeout=5)
+
+
+def test_path_retention_switching_modes(test_fixture_dir, rgi_path, test_interactive):
+    """Test 13: Path changes are retained when switching modes."""
+    import subprocess
+    import time
+    
+    # Create a tmux session for path retention test
+    session_name = f"test-path-retention-{os.getpid()}"
+    try:
+        # Start in pattern mode searching in current directory
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", session_name, "-c", test_fixture_dir,
+             f"{rgi_path} --rgi-pattern-mode TODO ."],
+            check=True, timeout=5
+        )
+        time.sleep(1.5)
+        
+        # Switch to command mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Go to end of line and edit path from . to shell-config
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "C-e"], check=True)  # Go to end
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "BSpace"], check=True)  # Delete .
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "shell-config"], check=True)
+        time.sleep(1.5)
+        
+        # Switch back to pattern mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Capture output
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            capture_output=True, text=True, timeout=5
+        )
+        output = result.stdout
+        
+        # Check if header shows shell-config instead of .
+        assert "shell-config" in output, \
+            f"Expected path 'shell-config' to be retained after switching modes, got:\n{output}"
+        
+    finally:
+        # Kill the session
+        subprocess.run(["tmux", "kill-session", "-t", session_name], 
+                      capture_output=True, timeout=5)
