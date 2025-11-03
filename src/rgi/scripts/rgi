@@ -195,9 +195,10 @@ def build_command_mode_fzf(
     # Command mode - show command WITHOUT config args in query (they're shown in header)
     # This prevents duplication when switching modes
     paths_str = " ".join(paths)
-    # Quote pattern for shell safety (shlex.quote handles spaces and special chars)
-    quoted_pattern = shlex.quote(pattern) if pattern else ""
-    full_command = f"rg{rg_opts} {quoted_pattern} {paths_str}"
+    # For fzf query display, quote pattern only if it contains spaces
+    # This makes the command readable while preventing ambiguity
+    display_pattern = f"'{pattern}'" if pattern and " " in pattern else pattern
+    full_command = f"rg{rg_opts} {display_pattern} {paths_str}"
 
     # Show effective command including config in header
     if config_args:
