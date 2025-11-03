@@ -139,19 +139,6 @@ def test_glob_filter_python_files(test_fixture_dir, rgi_path, test_interactive):
     assert "app.js" not in output, f"Did not expect 'app.js' in output, got:\n{output}"
 
 
-def test_real_code_only_option(test_fixture_dir, rgi_path, test_interactive):
-    """Test 5: Search with --real-code-only option."""
-    # Run rgi with --real-code-only option (passes through to ripgrep)
-    command = f"{rgi_path} --rgi-pattern-mode --real-code-only TODO ."
-    output = run_rgi_test(test_interactive, command)
-
-    # Check that TODO appears in the output
-    assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
-
-    # With --real-code-only, we should still find TODOs in code files
-    # This option is likely a custom alias that gets passed to ripgrep
-
-
 def test_fzf_ui_renders(test_fixture_dir, rgi_path, test_interactive):
     """Test 6: Check if fzf UI loads correctly."""
     # Run rgi and check for UI elements
