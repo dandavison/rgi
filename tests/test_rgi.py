@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+TEST_INTERACTIVE = Path(__file__).parent / "test-interactive"
+
 
 @pytest.fixture(scope="function")
 def test_fixture_dir():
@@ -38,17 +40,10 @@ def rgi_path():
     return str(Path(__file__).parent.parent / "src" / "rgi" / "scripts" / "rgi")
 
 
-@pytest.fixture(scope="module")
-def test_interactive():
-    """Get the path to the test-interactive script."""
-    return str(Path(__file__).parent / "test-interactive")
-
-
-def run_rgi_test(test_interactive, command, sleep_time=0.5):
+def run_rgi_test(command, sleep_time=0.5):
     """Run rgi with test-interactive and capture output.
 
     Args:
-        test_interactive: Path to test-interactive script
         command: Command to run
         sleep_time: How long to wait for UI to render
 
@@ -56,7 +51,7 @@ def run_rgi_test(test_interactive, command, sleep_time=0.5):
         str: Captured output from tmux session
     """
     result = subprocess.run(
-        [test_interactive, command, str(sleep_time)],
+        [TEST_INTERACTIVE, command, str(sleep_time)],
         capture_output=True,
         text=True,
         timeout=5,
@@ -64,11 +59,11 @@ def run_rgi_test(test_interactive, command, sleep_time=0.5):
     return result.stdout
 
 
-def test_basic_pattern_search(test_fixture_dir, rgi_path, test_interactive):
+def test_basic_pattern_search(test_fixture_dir, rgi_path):
     """Test 1: Basic pattern search for TODO."""
     # Run rgi with TODO pattern
     command = f"{rgi_path} --rgi-pattern-mode TODO ."
-    output = run_rgi_test(test_interactive, command)
+    output = run_rgi_test(command)
 
     # Check that TODO appears in the output
     assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
@@ -80,11 +75,11 @@ def test_basic_pattern_search(test_fixture_dir, rgi_path, test_interactive):
     ), f"Expected to find TODO comments in output, got:\n{output}"
 
 
-def test_search_specific_directory(test_fixture_dir, rgi_path, test_interactive):
+def test_search_specific_directory(test_fixture_dir, rgi_path):
     """Test 2: Search in specific directory."""
     # Run rgi with TODO pattern in shell-config directory
     command = f"{rgi_path} --rgi-pattern-mode TODO shell-config"
-    output = run_rgi_test(test_interactive, command)
+    output = run_rgi_test(command)
 
     # Check that we find the lib_prompt.sh file
     assert "lib_prompt.sh" in output, (
@@ -100,11 +95,11 @@ def test_search_specific_directory(test_fixture_dir, rgi_path, test_interactive)
     )
 
 
-def test_search_multiple_paths(test_fixture_dir, rgi_path, test_interactive):
+def test_search_multiple_paths(test_fixture_dir, rgi_path):
     """Test 3: Search in multiple paths."""
     # Run rgi with TODO pattern in both shell-config and src directories
     command = f"{rgi_path} --rgi-pattern-mode TODO shell-config src"
-    output = run_rgi_test(test_interactive, command)
+    output = run_rgi_test(command)
 
     # Check that we find files from both directories
     assert "lib_prompt.sh" in output, (
@@ -118,11 +113,11 @@ def test_search_multiple_paths(test_fixture_dir, rgi_path, test_interactive):
     assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
 
 
-def test_glob_filter_python_files(test_fixture_dir, rgi_path, test_interactive):
+def test_glob_filter_python_files(test_fixture_dir, rgi_path):
     """Test 4: Search with glob filter for Python files."""
     # Run rgi with glob filter for .py files
     command = f"{rgi_path} --rgi-pattern-mode -g '*.py' test ."
-    output = run_rgi_test(test_interactive, command)
+    output = run_rgi_test(command)
 
     # Check that we only find Python files
     assert ".py" in output, f"Expected '.py' in output, got:\n{output}"
@@ -139,11 +134,11 @@ def test_glob_filter_python_files(test_fixture_dir, rgi_path, test_interactive):
     assert "app.js" not in output, f"Did not expect 'app.js' in output, got:\n{output}"
 
 
-def test_fzf_ui_renders(test_fixture_dir, rgi_path, test_interactive):
+def test_fzf_ui_renders(test_fixture_dir, rgi_path):
     """Test 6: Check if fzf UI loads correctly."""
     # Run rgi and check for UI elements
     command = f"{rgi_path} --rgi-pattern-mode test ."
-    output = run_rgi_test(test_interactive, command)
+    output = run_rgi_test(command)
 
     # Check for fzf UI separator lines (these appear in the output)
     assert "─────" in output or "━━━" in output or "──" in output, (
@@ -151,11 +146,11 @@ def test_fzf_ui_renders(test_fixture_dir, rgi_path, test_interactive):
     )
 
 
-def test_preview_window_displays(test_fixture_dir, rgi_path, test_interactive):
+def test_preview_window_displays(test_fixture_dir, rgi_path):
     """Test 7: Check preview window displays."""
     # Run rgi with function pattern in src directory
     command = f"{rgi_path} --rgi-pattern-mode function src"
-    output = run_rgi_test(test_interactive, command)
+    output = run_rgi_test(command)
 
     # Check for preview window border characters
     assert "╭─" in output or "╭" in output or "│" in output, (
@@ -163,11 +158,11 @@ def test_preview_window_displays(test_fixture_dir, rgi_path, test_interactive):
     )
 
 
-def test_default_command_mode(test_fixture_dir, rgi_path, test_interactive):
+def test_default_command_mode(test_fixture_dir, rgi_path):
     """Test 8: Default command mode shows results."""
     # Run rgi without mode flag (defaults to command mode)
     command = f"{rgi_path} TODO ."
-    output = run_rgi_test(test_interactive, command, sleep_time=1.5)
+    output = run_rgi_test(command, sleep_time=1.5)
 
     # Check that we see results in command mode
     assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
@@ -184,7 +179,7 @@ def test_tab_switches_to_command_mode_skip():
     pytest.skip("Test 9 is skipped as Test 11 covers command mode switching")
 
 
-def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path, test_interactive):
+def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path):
     """Test 10: Tab toggles back to pattern mode."""
     import subprocess
 
@@ -238,7 +233,7 @@ def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path, test_inter
         )
 
 
-def test_typing_in_command_mode(test_fixture_dir, rgi_path, test_interactive):
+def test_typing_in_command_mode(test_fixture_dir, rgi_path):
     """Test 11: Typing in command mode shows results."""
     import subprocess
 
@@ -295,9 +290,7 @@ def test_typing_in_command_mode(test_fixture_dir, rgi_path, test_interactive):
         )
 
 
-def test_editing_command_mode_updates_results(
-    test_fixture_dir, rgi_path, test_interactive
-):
+def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
     """Test 12: Editing command in command mode updates results."""
     import subprocess
 
@@ -362,7 +355,7 @@ def test_editing_command_mode_updates_results(
         )
 
 
-def test_path_retention_switching_modes(test_fixture_dir, rgi_path, test_interactive):
+def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
     """Test 13: Path changes are retained when switching modes."""
     import subprocess
 
@@ -427,7 +420,7 @@ def test_path_retention_switching_modes(test_fixture_dir, rgi_path, test_interac
         )
 
 
-def test_glob_pattern_retention(test_fixture_dir, rgi_path, test_interactive):
+def test_glob_pattern_retention(test_fixture_dir, rgi_path):
     """Test 14: Glob patterns are retained when switching modes."""
     import subprocess
 
@@ -493,7 +486,7 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path, test_interactive):
         )
 
 
-def test_options_not_duplicated(test_fixture_dir, rgi_path, test_interactive):
+def test_options_not_duplicated(test_fixture_dir, rgi_path):
     """Test 15: Options not duplicated on repeated mode switches."""
     import subprocess
 
@@ -554,7 +547,7 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path, test_interactive):
 @pytest.mark.xfail(
     reason="Known issue: patterns with spaces not working on initial launch"
 )
-def test_patterns_with_spaces(test_fixture_dir, rgi_path, test_interactive):
+def test_patterns_with_spaces(test_fixture_dir, rgi_path):
     """Test 16: Patterns with spaces work correctly.
 
     Note: This test was failing in the original shell test suite.
@@ -574,7 +567,7 @@ func OtherFunction() {}
 
     # Run rgi with the pattern in pattern mode
     command = f"{rgi_path} --rgi-pattern-mode '{pattern}' {test_dir}"
-    output = run_rgi_test(test_interactive, command, sleep_time=1)
+    output = run_rgi_test(command, sleep_time=1)
 
     # Check that we find the function
     assert "SomeUpdateWorkflowExecutionAsActive" in output, (
