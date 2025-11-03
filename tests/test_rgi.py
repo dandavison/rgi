@@ -93,3 +93,17 @@ def test_search_specific_directory(test_fixture_dir, rgi_path, test_interactive)
     # Should find TODOs from shell-config but not from other directories
     assert "Add git branch display" in output or "Add color support" in output, \
         f"Expected shell-config TODOs in output, got:\n{output}"
+
+
+def test_search_multiple_paths(test_fixture_dir, rgi_path, test_interactive):
+    """Test 3: Search in multiple paths."""
+    # Run rgi with TODO pattern in both shell-config and src directories
+    command = f"{rgi_path} --rgi-pattern-mode TODO shell-config src"
+    output = run_rgi_test(test_interactive, command)
+    
+    # Check that we find files from both directories
+    assert "lib_prompt.sh" in output, f"Expected 'lib_prompt.sh' in output, got:\n{output}"
+    assert "test_runner.py" in output, f"Expected 'test_runner.py' in output, got:\n{output}"
+    
+    # Check that TODO appears in the output
+    assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
