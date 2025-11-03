@@ -8,30 +8,19 @@ uv tool install git+https://github.com/dandavison/rgi
 export RGI_EDITOR=vscode  # vscode | cursor | idea
 ```
 
-## Usage
+**Update to latest version**
 
-The `rgi` command-line interface is the same as [ripgrep](https://manpages.ubuntu.com/manpages/jammy/man1/rg.1.html) (`rg`).
-
-### Configuration Files
-
-`rgi` supports ripgrep configuration files via the `RIPGREP_CONFIG_PATH` environment variable. When set, the configuration file arguments are:
-- Automatically applied to all searches
-- Displayed in the command view so you can see the effective command
-
-Example usage:
-```bash
-export RIPGREP_CONFIG_PATH=~/.ripgreprc
-rgi pattern .
+```
+uv tool uninstall rgi
+uv tool install git+https://github.com/dandavison/rgi
 ```
 
-See `example-ripgreprc` in this repository for a sample configuration file.
+## Usage
 
-### Keyboard shortcuts
+Enter [ripgrep](https://manpages.ubuntu.com/manpages/jammy/man1/rg.1.html) commands as usual, but use `rgi` instead of `rg`.
 
-- **Tab**: Switch between pattern mode and command mode
-- **Enter**: Open the selected file at the matched line
+**Keyboard shortcuts**
 
-### Modes
 
-- **Pattern mode**: You edit the `rg` regular expression
-- **Command mode**: You edit the full `rg` command
+- **Enter**: Open the selected file at the matched line in your editor / IDE
+- **Tab**: Toggle between editing the full `rg` command vs editing just the search regex
