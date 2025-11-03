@@ -263,3 +263,48 @@ def test_typing_in_command_mode(test_fixture_dir, rgi_path, test_interactive):
         # Kill the session
         subprocess.run(["tmux", "kill-session", "-t", session_name], 
                       capture_output=True, timeout=5)
+
+
+def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path, test_interactive):
+    """Test 12: Editing command in command mode updates results."""
+    import subprocess
+    import time
+    
+    # Create a tmux session for editing test
+    session_name = f"test-edit-{os.getpid()}"
+    try:
+        # Start in pattern mode searching for 'test'
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", session_name, "-c", test_fixture_dir,
+             f"{rgi_path} --rgi-pattern-mode test ."],
+            check=True, timeout=5
+        )
+        time.sleep(1.5)
+        
+        # Switch to command mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Clear the command line
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "C-u"], check=True)
+        
+        # Type a new command searching for TODO
+        subprocess.run(["tmux", "send-keys", "-t", session_name, 
+                       "rg --follow -i --hidden -g '!.git/*' --json TODO ."], check=True)
+        time.sleep(2)
+        
+        # Capture output
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            capture_output=True, text=True, timeout=5
+        )
+        output = result.stdout
+        
+        # Should find TODO in results after editing command
+        assert "TODO" in output, \
+            f"Expected to find 'TODO' in results after editing command, got:\n{output}"
+        
+    finally:
+        # Kill the session
+        subprocess.run(["tmux", "kill-session", "-t", session_name], 
+                      capture_output=True, timeout=5)
