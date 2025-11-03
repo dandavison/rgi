@@ -355,3 +355,50 @@ def test_path_retention_switching_modes(test_fixture_dir, rgi_path, test_interac
         # Kill the session
         subprocess.run(["tmux", "kill-session", "-t", session_name], 
                       capture_output=True, timeout=5)
+
+
+def test_glob_pattern_retention(test_fixture_dir, rgi_path, test_interactive):
+    """Test 14: Glob patterns are retained when switching modes."""
+    import subprocess
+    import time
+    
+    # Create a tmux session for glob retention test
+    session_name = f"test-glob-retention-{os.getpid()}"
+    try:
+        # Start in pattern mode
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", session_name, "-c", test_fixture_dir,
+             f"{rgi_path} --rgi-pattern-mode test ."],
+            check=True, timeout=5
+        )
+        time.sleep(1.5)
+        
+        # Switch to command mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Go to beginning and skip past 'rg' and options
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "C-a"], check=True)  # Go to beginning
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "M-f", "M-f", "M-f", "M-f"], check=True)  # Skip words
+        subprocess.run(["tmux", "send-keys", "-t", session_name, " -g '!*.html'"], check=True)  # Add glob pattern
+        time.sleep(1.5)
+        
+        # Switch back to pattern mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Capture output
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            capture_output=True, text=True, timeout=5
+        )
+        output = result.stdout
+        
+        # Check if header shows the glob pattern
+        assert "-g" in output and ("!*.html" in output or "!\\*.html" in output), \
+            f"Expected glob pattern '-g !*.html' to be retained after switching modes, got:\n{output}"
+        
+    finally:
+        # Kill the session
+        subprocess.run(["tmux", "kill-session", "-t", session_name], 
+                      capture_output=True, timeout=5)
