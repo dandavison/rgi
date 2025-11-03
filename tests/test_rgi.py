@@ -137,3 +137,25 @@ def test_real_code_only_option(test_fixture_dir, rgi_path, test_interactive):
     
     # With --real-code-only, we should still find TODOs in code files
     # This option is likely a custom alias that gets passed to ripgrep
+
+
+def test_fzf_ui_renders(test_fixture_dir, rgi_path, test_interactive):
+    """Test 6: Check if fzf UI loads correctly."""
+    # Run rgi and check for UI elements
+    command = f"{rgi_path} --rgi-pattern-mode test ."
+    output = run_rgi_test(test_interactive, command)
+    
+    # Check for fzf UI separator lines (these appear in the output)
+    assert "─────" in output or "━━━" in output or "──" in output, \
+        f"Expected UI separator lines in output, got:\n{output}"
+
+
+def test_preview_window_displays(test_fixture_dir, rgi_path, test_interactive):
+    """Test 7: Check preview window displays."""
+    # Run rgi with function pattern in src directory
+    command = f"{rgi_path} --rgi-pattern-mode function src"
+    output = run_rgi_test(test_interactive, command)
+    
+    # Check for preview window border characters
+    assert "╭─" in output or "╭" in output or "│" in output, \
+        f"Expected preview window border in output, got:\n{output}"
