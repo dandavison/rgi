@@ -172,3 +172,52 @@ def test_default_command_mode(test_fixture_dir, rgi_path, test_interactive):
     
     # Command mode should show the rg command in the query line
     assert "rg" in output, f"Expected 'rg' command in output, got:\n{output}"
+
+
+# Test 9 is skipped in the original test suite (covered by Test 11)
+def test_tab_switches_to_command_mode_skip():
+    """Test 9: Tab switches to command mode (SKIPPED - covered by Test 11)."""
+    import pytest
+    pytest.skip("Test 9 is skipped as Test 11 covers command mode switching")
+
+
+def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path, test_interactive):
+    """Test 10: Tab toggles back to pattern mode."""
+    import subprocess
+    import time
+    
+    # Create a tmux session for mode switching test
+    session_name = f"test-toggle-{os.getpid()}"
+    try:
+        # Start in pattern mode
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", session_name, "-c", test_fixture_dir,
+             f"{rgi_path} --rgi-pattern-mode TODO ."],
+            check=True, timeout=5
+        )
+        time.sleep(1.5)
+        
+        # Switch to command mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Switch back to pattern mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Capture output
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            capture_output=True, text=True, timeout=5
+        )
+        output = result.stdout
+        
+        # In pattern mode, the header shows "rg {q} ." and the query line shows "TODO"
+        assert "rg" in output and "{q}" in output, \
+            f"Expected pattern mode header with 'rg' and '{{q}}' in output, got:\n{output}"
+        assert "TODO" in output, f"Expected 'TODO' in query line, got:\n{output}"
+        
+    finally:
+        # Kill the session
+        subprocess.run(["tmux", "kill-session", "-t", session_name], 
+                      capture_output=True, timeout=5)
