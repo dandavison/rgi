@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Interactive file search via ripgrep, fzf, bat, and delta"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = []
+dependencies = [
+    "pytest-pretty>=1.2.0",
+]
 authors = [
     { name = "Dan Davison", email = "dandavison7@gmail.com" }
 ]
