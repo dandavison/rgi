@@ -159,3 +159,16 @@ def test_preview_window_displays(test_fixture_dir, rgi_path, test_interactive):
     # Check for preview window border characters
     assert "╭─" in output or "╭" in output or "│" in output, \
         f"Expected preview window border in output, got:\n{output}"
+
+
+def test_default_command_mode(test_fixture_dir, rgi_path, test_interactive):
+    """Test 8: Default command mode shows results."""
+    # Run rgi without mode flag (defaults to command mode)
+    command = f"{rgi_path} TODO ."
+    output = run_rgi_test(test_interactive, command, sleep_time=1.5)
+    
+    # Check that we see results in command mode
+    assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
+    
+    # Command mode should show the rg command in the query line
+    assert "rg" in output, f"Expected 'rg' command in output, got:\n{output}"
