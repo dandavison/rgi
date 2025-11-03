@@ -221,3 +221,45 @@ def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path, test_inter
         # Kill the session
         subprocess.run(["tmux", "kill-session", "-t", session_name], 
                       capture_output=True, timeout=5)
+
+
+def test_typing_in_command_mode(test_fixture_dir, rgi_path, test_interactive):
+    """Test 11: Typing in command mode shows results."""
+    import subprocess
+    import time
+    
+    # Create a tmux session for typing test
+    session_name = f"test-type-{os.getpid()}"
+    try:
+        # Start in pattern mode
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", session_name, "-c", test_fixture_dir,
+             f"{rgi_path} --rgi-pattern-mode TODO ."],
+            check=True, timeout=5
+        )
+        time.sleep(1.5)
+        
+        # Switch to command mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Add a space to trigger reload
+        subprocess.run(["tmux", "send-keys", "-t", session_name, " "], check=True)
+        time.sleep(1.5)
+        
+        # Capture output
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            capture_output=True, text=True, timeout=5
+        )
+        output = result.stdout
+        
+        # Should see file extensions and results
+        assert (".sh:" in output or ".txt:" in output or ".py:" in output or 
+                ".md:" in output or "TODO" in output), \
+            f"Expected to see results after typing in command mode, got:\n{output}"
+        
+    finally:
+        # Kill the session
+        subprocess.run(["tmux", "kill-session", "-t", session_name], 
+                      capture_output=True, timeout=5)
