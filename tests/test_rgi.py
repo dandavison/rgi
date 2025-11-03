@@ -107,3 +107,20 @@ def test_search_multiple_paths(test_fixture_dir, rgi_path, test_interactive):
     
     # Check that TODO appears in the output
     assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
+
+
+def test_glob_filter_python_files(test_fixture_dir, rgi_path, test_interactive):
+    """Test 4: Search with glob filter for Python files."""
+    # Run rgi with glob filter for .py files
+    command = f"{rgi_path} --rgi-pattern-mode -g '*.py' test ."
+    output = run_rgi_test(test_interactive, command)
+    
+    # Check that we only find Python files
+    assert ".py" in output, f"Expected '.py' in output, got:\n{output}"
+    
+    # Check that we find test_runner.py
+    assert "test_runner.py" in output, f"Expected 'test_runner.py' in output, got:\n{output}"
+    
+    # Should NOT find shell or JavaScript files
+    assert "lib_prompt.sh" not in output, f"Did not expect 'lib_prompt.sh' in output, got:\n{output}"
+    assert "app.js" not in output, f"Did not expect 'app.js' in output, got:\n{output}"
