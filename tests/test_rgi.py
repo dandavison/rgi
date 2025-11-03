@@ -59,6 +59,34 @@ def run_rgi_test(command, sleep_time=0.5):
     return result.stdout
 
 
+def get_test_tmux_socket(session_name):
+    """Get a unique tmux socket name for testing.
+
+    This ensures tests run in an isolated tmux server that doesn't
+    interfere with the user's tmux session.
+
+    Args:
+        session_name: Name of the test session
+
+    Returns:
+        str: Socket name for tmux -L flag
+    """
+    return f"test-socket-{session_name}"
+
+
+def tmux_cmd(socket, *args):
+    """Build a tmux command with the test socket.
+
+    Args:
+        socket: Socket name for tmux -L flag
+        *args: Additional tmux arguments
+
+    Returns:
+        list: Command list for subprocess.run
+    """
+    return ["tmux", "-L", socket] + list(args)
+
+
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_basic_pattern_search(test_fixture_dir, rgi_path, mode):
     """Test 1: Basic pattern search for TODO in both modes."""
@@ -211,11 +239,13 @@ def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path):
 
     # Create a tmux session for mode switching test
     session_name = f"test-toggle-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
     try:
         # Start in pattern mode
         subprocess.run(
-            [
-                "tmux",
+            tmux_cmd(
+                socket,
                 "new-session",
                 "-d",
                 "-s",
@@ -223,23 +253,27 @@ def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path):
                 "-c",
                 test_fixture_dir,
                 f"{rgi_path} --rgi-pattern-mode TODO .",
-            ],
+            ),
             check=True,
             timeout=5,
         )
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Switch back to pattern mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Capture output
         result = subprocess.run(
-            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
             capture_output=True,
             text=True,
             timeout=5,
@@ -253,10 +287,13 @@ def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path):
         assert "TODO" in output, f"Expected 'TODO' in query line, got:\n{output}"
 
     finally:
-        # Kill the session
+        # Kill the session and server
         subprocess.run(
-            ["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=5
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
         )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
 def test_typing_in_command_mode(test_fixture_dir, rgi_path):
@@ -265,11 +302,13 @@ def test_typing_in_command_mode(test_fixture_dir, rgi_path):
 
     # Create a tmux session for typing test
     session_name = f"test-type-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
     try:
         # Start in pattern mode
         subprocess.run(
-            [
-                "tmux",
+            tmux_cmd(
+                socket,
                 "new-session",
                 "-d",
                 "-s",
@@ -277,23 +316,27 @@ def test_typing_in_command_mode(test_fixture_dir, rgi_path):
                 "-c",
                 test_fixture_dir,
                 f"{rgi_path} --rgi-pattern-mode TODO .",
-            ],
+            ),
             check=True,
             timeout=5,
         )
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Add a space to trigger reload
-        subprocess.run(["tmux", "send-keys", "-t", session_name, " "], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, " "), check=True
+        )
         time.sleep(1.5)
 
         # Capture output
         result = subprocess.run(
-            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
             capture_output=True,
             text=True,
             timeout=5,
@@ -310,10 +353,13 @@ def test_typing_in_command_mode(test_fixture_dir, rgi_path):
         ), f"Expected to see results after typing in command mode, got:\n{output}"
 
     finally:
-        # Kill the session
+        # Kill the session and server
         subprocess.run(
-            ["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=5
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
         )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
 def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
@@ -322,11 +368,13 @@ def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
 
     # Create a tmux session for editing test
     session_name = f"test-edit-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
     try:
         # Start in pattern mode searching for 'test'
         subprocess.run(
-            [
-                "tmux",
+            tmux_cmd(
+                socket,
                 "new-session",
                 "-d",
                 "-s",
@@ -334,35 +382,39 @@ def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
                 "-c",
                 test_fixture_dir,
                 f"{rgi_path} --rgi-pattern-mode test .",
-            ],
+            ),
             check=True,
             timeout=5,
         )
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Clear the command line
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "C-u"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "C-u"), check=True
+        )
 
         # Type a new command searching for TODO
         subprocess.run(
-            [
-                "tmux",
+            tmux_cmd(
+                socket,
                 "send-keys",
                 "-t",
                 session_name,
-                "rg --follow -i --hidden -g '!.git/*' --json TODO .",
-            ],
+                "rg TODO .",
+            ),
             check=True,
         )
         time.sleep(2)
 
         # Capture output
         result = subprocess.run(
-            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
             capture_output=True,
             text=True,
             timeout=5,
@@ -375,10 +427,13 @@ def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
         )
 
     finally:
-        # Kill the session
+        # Kill the session and server
         subprocess.run(
-            ["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=5
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
         )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
 def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
@@ -387,11 +442,13 @@ def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
 
     # Create a tmux session for path retention test
     session_name = f"test-path-retention-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
     try:
         # Start in pattern mode searching in current directory
         subprocess.run(
-            [
-                "tmux",
+            tmux_cmd(
+                socket,
                 "new-session",
                 "-d",
                 "-s",
@@ -399,35 +456,40 @@ def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
                 "-c",
                 test_fixture_dir,
                 f"{rgi_path} --rgi-pattern-mode TODO .",
-            ],
+            ),
             check=True,
             timeout=5,
         )
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Go to end of line and edit path from . to shell-config
         subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, "C-e"], check=True
+            tmux_cmd(socket, "send-keys", "-t", session_name, "C-e"), check=True
         )  # Go to end
         subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, "BSpace"], check=True
+            tmux_cmd(socket, "send-keys", "-t", session_name, "BSpace"), check=True
         )  # Delete .
         subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, "shell-config"], check=True
+            tmux_cmd(socket, "send-keys", "-t", session_name, "shell-config"),
+            check=True,
         )
         time.sleep(1.5)
 
         # Switch back to pattern mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Capture output
         result = subprocess.run(
-            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
             capture_output=True,
             text=True,
             timeout=5,
@@ -440,10 +502,13 @@ def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
         )
 
     finally:
-        # Kill the session
+        # Kill the session and server
         subprocess.run(
-            ["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=5
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
         )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
 def test_glob_pattern_retention(test_fixture_dir, rgi_path):
@@ -452,11 +517,13 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path):
 
     # Create a tmux session for glob retention test
     session_name = f"test-glob-retention-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
     try:
         # Start in pattern mode
         subprocess.run(
-            [
-                "tmux",
+            tmux_cmd(
+                socket,
                 "new-session",
                 "-d",
                 "-s",
@@ -464,36 +531,43 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path):
                 "-c",
                 test_fixture_dir,
                 f"{rgi_path} --rgi-pattern-mode test .",
-            ],
+            ),
             check=True,
             timeout=5,
         )
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Go to beginning and skip past 'rg' and options
         subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, "C-a"], check=True
+            tmux_cmd(socket, "send-keys", "-t", session_name, "C-a"), check=True
         )  # Go to beginning
         subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, "M-f", "M-f", "M-f", "M-f"],
+            tmux_cmd(
+                socket, "send-keys", "-t", session_name, "M-f", "M-f", "M-f", "M-f"
+            ),
             check=True,
         )  # Skip words
         subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, " -g '!*.html'"], check=True
+            tmux_cmd(socket, "send-keys", "-t", session_name, " -g '!*.html'"),
+            check=True,
         )  # Add glob pattern
         time.sleep(1.5)
 
         # Switch back to pattern mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Capture output
         result = subprocess.run(
-            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
             capture_output=True,
             text=True,
             timeout=5,
@@ -506,10 +580,13 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path):
         )
 
     finally:
-        # Kill the session
+        # Kill the session and server
         subprocess.run(
-            ["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=5
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
         )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
 def test_options_not_duplicated(test_fixture_dir, rgi_path):
@@ -518,11 +595,13 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path):
 
     # Create a tmux session for duplication test
     session_name = f"test-dup-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
     try:
         # Start with a glob option
         subprocess.run(
-            [
-                "tmux",
+            tmux_cmd(
+                socket,
                 "new-session",
                 "-d",
                 "-s",
@@ -530,27 +609,33 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path):
                 "-c",
                 test_fixture_dir,
                 f"{rgi_path} -g '*.py' --rgi-pattern-mode def .",
-            ],
+            ),
             check=True,
             timeout=5,
         )
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Switch back to pattern mode
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Switch to command mode again
-        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
+        )
         time.sleep(1.5)
 
         # Capture output
         result = subprocess.run(
-            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
             capture_output=True,
             text=True,
             timeout=5,
@@ -564,10 +649,13 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path):
         )
 
     finally:
-        # Kill the session
+        # Kill the session and server
         subprocess.run(
-            ["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=5
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
         )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
 @pytest.mark.xfail(

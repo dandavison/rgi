@@ -19,6 +19,8 @@ fi
 COMMAND="$1"
 SLEEP_TIME="${2:-0.5}"
 SESSION_NAME="test-interactive-$$"
+# Use a separate tmux server socket for tests to avoid interfering with user's tmux
+TMUX_SOCKET="test-socket-$$"
 
 # Check if tmux is available
 if ! command -v tmux &>/dev/null; then
@@ -27,23 +29,27 @@ if ! command -v tmux &>/dev/null; then
 fi
 
 # Kill any existing test session with same name (cleanup from failed runs)
-tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+tmux -L "$TMUX_SOCKET" kill-session -t "$SESSION_NAME" 2>/dev/null
+# Also try to kill the entire test server if it exists
+tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null
 
 echo "=== Testing: $COMMAND ===" >&2
 echo "=== Waiting ${SLEEP_TIME}s for UI to render ===" >&2
 
 # Create a detached tmux session running the command
 # Use the current directory as the working directory for the command
-tmux new-session -d -s "$SESSION_NAME" -c "$(pwd)" bash -c "$COMMAND"
+# -L specifies a separate socket, isolating this from the user's tmux server
+tmux -L "$TMUX_SOCKET" new-session -d -s "$SESSION_NAME" -c "$(pwd)" bash -c "$COMMAND"
 
 # Wait for the UI to render
 sleep "$SLEEP_TIME"
 
 # Capture the pane content
 echo "=== Captured output ===" >&2
-tmux capture-pane -t "$SESSION_NAME" -p
+tmux -L "$TMUX_SOCKET" capture-pane -t "$SESSION_NAME" -p
 
-# Kill the session
-tmux kill-session -t "$SESSION_NAME" 2>/dev/null
+# Kill the session and the test server
+tmux -L "$TMUX_SOCKET" kill-session -t "$SESSION_NAME" 2>/dev/null
+tmux -L "$TMUX_SOCKET" kill-server 2>/dev/null
 
 echo "=== Test complete ===" >&2
