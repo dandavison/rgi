@@ -402,3 +402,49 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path, test_interactive):
         # Kill the session
         subprocess.run(["tmux", "kill-session", "-t", session_name], 
                       capture_output=True, timeout=5)
+
+
+def test_options_not_duplicated(test_fixture_dir, rgi_path, test_interactive):
+    """Test 15: Options not duplicated on repeated mode switches."""
+    import subprocess
+    import time
+    
+    # Create a tmux session for duplication test
+    session_name = f"test-dup-{os.getpid()}"
+    try:
+        # Start with a glob option
+        subprocess.run(
+            ["tmux", "new-session", "-d", "-s", session_name, "-c", test_fixture_dir,
+             f"{rgi_path} -g '*.py' --rgi-pattern-mode def ."],
+            check=True, timeout=5
+        )
+        time.sleep(1.5)
+        
+        # Switch to command mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Switch back to pattern mode
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Switch to command mode again
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "Tab"], check=True)
+        time.sleep(1.5)
+        
+        # Capture output
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-t", session_name, "-p"],
+            capture_output=True, text=True, timeout=5
+        )
+        output = result.stdout
+        
+        # Count occurrences of the glob pattern
+        count = output.count("-g '*.py'")
+        assert count == 1, \
+            f"Expected -g '*.py' to appear exactly once, but appeared {count} times in output:\n{output}"
+        
+    finally:
+        # Kill the session
+        subprocess.run(["tmux", "kill-session", "-t", session_name], 
+                      capture_output=True, timeout=5)
