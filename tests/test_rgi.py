@@ -76,3 +76,20 @@ def test_basic_pattern_search(test_fixture_dir, rgi_path, test_interactive):
     # Check that we found TODO comments in the fixture files
     assert "Add git branch display" in output or "Implement parallel test execution" in output, \
         f"Expected to find TODO comments in output, got:\n{output}"
+
+
+def test_search_specific_directory(test_fixture_dir, rgi_path, test_interactive):
+    """Test 2: Search in specific directory."""
+    # Run rgi with TODO pattern in shell-config directory
+    command = f"{rgi_path} --rgi-pattern-mode TODO shell-config"
+    output = run_rgi_test(test_interactive, command)
+    
+    # Check that we find the lib_prompt.sh file
+    assert "lib_prompt.sh" in output, f"Expected 'lib_prompt.sh' in output, got:\n{output}"
+    
+    # Check that TODO appears in the output
+    assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
+    
+    # Should find TODOs from shell-config but not from other directories
+    assert "Add git branch display" in output or "Add color support" in output, \
+        f"Expected shell-config TODOs in output, got:\n{output}"
