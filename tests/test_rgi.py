@@ -59,102 +59,128 @@ def run_rgi_test(command, sleep_time=0.5):
     return result.stdout
 
 
-def test_basic_pattern_search(test_fixture_dir, rgi_path):
-    """Test 1: Basic pattern search for TODO."""
+@pytest.mark.parametrize("mode", ["pattern", "command"])
+def test_basic_pattern_search(test_fixture_dir, rgi_path, mode):
+    """Test 1: Basic pattern search for TODO in both modes."""
     # Run rgi with TODO pattern
-    command = f"{rgi_path} --rgi-pattern-mode TODO ."
+    if mode == "pattern":
+        command = f"{rgi_path} --rgi-pattern-mode TODO ."
+    else:  # command mode
+        command = f"{rgi_path} --rgi-command-mode TODO ."
     output = run_rgi_test(command)
 
     # Check that TODO appears in the output
-    assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
+    assert "TODO" in output, f"Expected 'TODO' in {mode} mode output, got:\n{output}"
 
     # Check that we found TODO comments in the fixture files
     assert (
         "Add git branch display" in output
         or "Implement parallel test execution" in output
-    ), f"Expected to find TODO comments in output, got:\n{output}"
+    ), f"Expected to find TODO comments in {mode} mode output, got:\n{output}"
 
 
-def test_search_specific_directory(test_fixture_dir, rgi_path):
-    """Test 2: Search in specific directory."""
+@pytest.mark.parametrize("mode", ["pattern", "command"])
+def test_search_specific_directory(test_fixture_dir, rgi_path, mode):
+    """Test 2: Search in specific directory in both modes."""
     # Run rgi with TODO pattern in shell-config directory
-    command = f"{rgi_path} --rgi-pattern-mode TODO shell-config"
+    if mode == "pattern":
+        command = f"{rgi_path} --rgi-pattern-mode TODO shell-config"
+    else:  # command mode
+        command = f"{rgi_path} --rgi-command-mode TODO shell-config"
     output = run_rgi_test(command)
 
     # Check that we find the lib_prompt.sh file
     assert "lib_prompt.sh" in output, (
-        f"Expected 'lib_prompt.sh' in output, got:\n{output}"
+        f"Expected 'lib_prompt.sh' in {mode} mode output, got:\n{output}"
     )
 
     # Check that TODO appears in the output
-    assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
+    assert "TODO" in output, f"Expected 'TODO' in {mode} mode output, got:\n{output}"
 
     # Should find TODOs from shell-config but not from other directories
     assert "Add git branch display" in output or "Add color support" in output, (
-        f"Expected shell-config TODOs in output, got:\n{output}"
+        f"Expected shell-config TODOs in {mode} mode output, got:\n{output}"
     )
 
 
-def test_search_multiple_paths(test_fixture_dir, rgi_path):
-    """Test 3: Search in multiple paths."""
+@pytest.mark.parametrize("mode", ["pattern", "command"])
+def test_search_multiple_paths(test_fixture_dir, rgi_path, mode):
+    """Test 3: Search in multiple paths in both modes."""
     # Run rgi with TODO pattern in both shell-config and src directories
-    command = f"{rgi_path} --rgi-pattern-mode TODO shell-config src"
+    if mode == "pattern":
+        command = f"{rgi_path} --rgi-pattern-mode TODO shell-config src"
+    else:  # command mode
+        command = f"{rgi_path} --rgi-command-mode TODO shell-config src"
     output = run_rgi_test(command)
 
     # Check that we find files from both directories
     assert "lib_prompt.sh" in output, (
-        f"Expected 'lib_prompt.sh' in output, got:\n{output}"
+        f"Expected 'lib_prompt.sh' in {mode} mode output, got:\n{output}"
     )
     assert "test_runner.py" in output, (
-        f"Expected 'test_runner.py' in output, got:\n{output}"
+        f"Expected 'test_runner.py' in {mode} mode output, got:\n{output}"
     )
 
     # Check that TODO appears in the output
-    assert "TODO" in output, f"Expected 'TODO' in output, got:\n{output}"
+    assert "TODO" in output, f"Expected 'TODO' in {mode} mode output, got:\n{output}"
 
 
-def test_glob_filter_python_files(test_fixture_dir, rgi_path):
-    """Test 4: Search with glob filter for Python files."""
+@pytest.mark.parametrize("mode", ["pattern", "command"])
+def test_glob_filter_python_files(test_fixture_dir, rgi_path, mode):
+    """Test 4: Search with glob filter for Python files in both modes."""
     # Run rgi with glob filter for .py files
-    command = f"{rgi_path} --rgi-pattern-mode -g '*.py' test ."
+    if mode == "pattern":
+        command = f"{rgi_path} -g '*.py' --rgi-pattern-mode test ."
+    else:  # command mode
+        command = f"{rgi_path} -g '*.py' --rgi-command-mode test ."
     output = run_rgi_test(command)
 
     # Check that we only find Python files
-    assert ".py" in output, f"Expected '.py' in output, got:\n{output}"
+    assert ".py" in output, f"Expected '.py' in {mode} mode output, got:\n{output}"
 
     # Check that we find test_runner.py
     assert "test_runner.py" in output, (
-        f"Expected 'test_runner.py' in output, got:\n{output}"
+        f"Expected 'test_runner.py' in {mode} mode output, got:\n{output}"
     )
 
     # Should NOT find shell or JavaScript files
     assert "lib_prompt.sh" not in output, (
-        f"Did not expect 'lib_prompt.sh' in output, got:\n{output}"
+        f"Did not expect 'lib_prompt.sh' in {mode} mode output, got:\n{output}"
     )
-    assert "app.js" not in output, f"Did not expect 'app.js' in output, got:\n{output}"
+    assert "app.js" not in output, (
+        f"Did not expect 'app.js' in {mode} mode output, got:\n{output}"
+    )
 
 
-def test_fzf_ui_renders(test_fixture_dir, rgi_path):
-    """Test 6: Check if fzf UI loads correctly."""
+@pytest.mark.parametrize("mode", ["pattern", "command"])
+def test_fzf_ui_renders(test_fixture_dir, rgi_path, mode):
+    """Test 6: Check if fzf UI loads correctly in both modes."""
     # Run rgi and check for UI elements
-    command = f"{rgi_path} --rgi-pattern-mode test ."
+    if mode == "pattern":
+        command = f"{rgi_path} --rgi-pattern-mode test ."
+    else:  # command mode
+        command = f"{rgi_path} --rgi-command-mode test ."
     output = run_rgi_test(command)
 
     # Check for fzf UI separator lines (these appear in the output)
     assert "─────" in output or "━━━" in output or "──" in output, (
-        f"Expected UI separator lines in output, got:\n{output}"
+        f"Expected UI separator lines in {mode} mode output, got:\n{output}"
     )
 
 
-def test_preview_window_displays(test_fixture_dir, rgi_path):
-    """Test 7: Check preview window displays."""
+@pytest.mark.parametrize("mode", ["pattern", "command"])
+def test_preview_window_displays(test_fixture_dir, rgi_path, mode):
+    """Test 7: Check preview window displays in both modes."""
     # Run rgi with function pattern in src directory
-    command = f"{rgi_path} --rgi-pattern-mode function src"
+    if mode == "pattern":
+        command = f"{rgi_path} --rgi-pattern-mode function src"
+    else:  # command mode
+        command = f"{rgi_path} --rgi-command-mode function src"
     output = run_rgi_test(command)
 
     # Check for preview window border characters
     assert "╭─" in output or "╭" in output or "│" in output, (
-        f"Expected preview window border in output, got:\n{output}"
+        f"Expected preview window border in {mode} mode output, got:\n{output}"
     )
 
 
@@ -547,8 +573,9 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path):
 @pytest.mark.xfail(
     reason="Known issue: patterns with spaces not working on initial launch"
 )
-def test_patterns_with_spaces(test_fixture_dir, rgi_path):
-    """Test 16: Patterns with spaces work correctly.
+@pytest.mark.parametrize("mode", ["pattern", "command"])
+def test_patterns_with_spaces(test_fixture_dir, rgi_path, mode):
+    """Test 16: Patterns with spaces work correctly in both modes.
 
     Note: This test was failing in the original shell test suite.
     The issue persists: patterns with spaces don't work on initial launch.
@@ -565,8 +592,11 @@ func OtherFunction() {}
     # Pattern with spaces
     pattern = "func .*UpdateWorkflowExecutionAsActive"
 
-    # Run rgi with the pattern in pattern mode
-    command = f"{rgi_path} --rgi-pattern-mode '{pattern}' {test_dir}"
+    # Run rgi with the pattern in the specified mode
+    if mode == "pattern":
+        command = f"{rgi_path} --rgi-pattern-mode '{pattern}' {test_dir}"
+    else:  # command mode
+        command = f"{rgi_path} --rgi-command-mode '{pattern}' {test_dir}"
     output = run_rgi_test(command, sleep_time=1)
 
     # Check that we find the function
