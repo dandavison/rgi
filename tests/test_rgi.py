@@ -448,3 +448,38 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path, test_interactive):
         # Kill the session
         subprocess.run(["tmux", "kill-session", "-t", session_name], 
                       capture_output=True, timeout=5)
+
+
+@pytest.mark.xfail(reason="Known issue: patterns with spaces not working on initial launch")
+def test_patterns_with_spaces(test_fixture_dir, rgi_path, test_interactive):
+    """Test 16: Patterns with spaces work correctly.
+    
+    Note: This test was failing in the original shell test suite.
+    The issue persists: patterns with spaces don't work on initial launch.
+    """
+    import shutil
+    import subprocess
+    
+    # Create test file with specific content
+    test_dir = Path(test_fixture_dir) / "test-spaces"
+    test_dir.mkdir(exist_ok=True)
+    workflow_file = test_dir / "workflow.go"
+    workflow_file.write_text("""func SomeUpdateWorkflowExecutionAsActive() {}
+func OtherFunction() {}
+""")
+    
+    # Pattern with spaces
+    pattern = "func .*UpdateWorkflowExecutionAsActive"
+    
+    # Run rgi with the pattern in pattern mode
+    command = f'{rgi_path} --rgi-pattern-mode \'{pattern}\' {test_dir}'
+    output = run_rgi_test(test_interactive, command, sleep_time=1)
+    
+    # Check that we find the function
+    assert "SomeUpdateWorkflowExecutionAsActive" in output, \
+        f"Expected to find 'SomeUpdateWorkflowExecutionAsActive' with pattern '{pattern}', got:\n{output}"
+    
+    # Verify the pattern appears correctly in the UI
+    # In the fixed Python version, shlex.quote should handle this properly
+    assert pattern in output or f"'{pattern}'" in output, \
+        f"Expected pattern '{pattern}' to appear in output, got:\n{output}"
