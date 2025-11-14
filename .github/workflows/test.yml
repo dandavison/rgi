@@ -119,19 +119,10 @@ jobs:
             python3-pip
             python3-venv
             curl
-            wget
             git
 
-      - name: Install delta in WSL
-        shell: wsl-bash {0}
-        timeout-minutes: 5
-        continue-on-error: true  # Delta is optional for tests
-        run: |
-          # Try to install delta, but don't fail if it doesn't work
-          echo "Attempting to install delta (optional)..."
-          wget --timeout=20 --tries=1 https://github.com/dandavison/delta/releases/download/0.17.0/git-delta_0.17.0_amd64.deb && \
-          sudo DEBIAN_FRONTEND=noninteractive dpkg -i git-delta_0.17.0_amd64.deb || \
-          echo "Delta installation failed, continuing without it"
+      # Skip delta installation on Windows - it's not essential for tests
+      # and causes hanging issues in CI
 
       - name: Install uv in WSL
         shell: wsl-bash {0}
@@ -163,8 +154,7 @@ jobs:
           rg --version
           echo "=== fzf version ==="
           fzf --version
-          echo "=== delta version ==="
-          delta --version || echo "Delta not installed"
+          echo "=== Note: Delta not installed on Windows CI ==="
 
       - name: Run tests in WSL
         shell: wsl-bash {0}
