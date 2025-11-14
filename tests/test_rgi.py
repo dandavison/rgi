@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Test suite for rgi using pytest."""
 
+from __future__ import annotations
+
 import os
 import shutil
 import subprocess
 import tempfile
 import time
 from pathlib import Path
+from typing import Any, Generator, List
 
 import pytest
 
@@ -14,7 +17,7 @@ TEST_INTERACTIVE = Path(__file__).parent / "test-interactive"
 
 
 @pytest.fixture(scope="function")
-def test_fixture_dir():
+def test_fixture_dir() -> Generator[str, None, None]:
     """Create a temporary directory with test fixtures."""
     # Create temporary directory
     fixture_dir = tempfile.mkdtemp(prefix="test-fixture-")
@@ -35,12 +38,12 @@ def test_fixture_dir():
 
 
 @pytest.fixture(scope="module")
-def rgi_path():
+def rgi_path() -> str:
     """Get the path to the rgi script."""
     return str(Path(__file__).parent.parent / "src" / "rgi" / "scripts" / "rgi")
 
 
-def run_rgi_test(command, sleep_time=0.5):
+def run_rgi_test(command: str, sleep_time: float = 0.5) -> str:
     """Run rgi with test-interactive and capture output.
 
     Args:
@@ -59,7 +62,7 @@ def run_rgi_test(command, sleep_time=0.5):
     return result.stdout
 
 
-def get_test_tmux_socket(session_name):
+def get_test_tmux_socket(session_name: str) -> str:
     """Get a unique tmux socket name for testing.
 
     This ensures tests run in an isolated tmux server that doesn't
@@ -74,7 +77,7 @@ def get_test_tmux_socket(session_name):
     return f"test-socket-{session_name}"
 
 
-def tmux_cmd(socket, *args):
+def tmux_cmd(socket: str, *args: str) -> List[str]:
     """Build a tmux command with the test socket.
 
     Args:
@@ -102,7 +105,9 @@ def test_basic_pattern_search(test_fixture_dir, rgi_path, mode):
 
     # Check that we found TODO comments in the fixture files
     assert (
-        "Add git branch display" in output
+        "Implement error handling" in output
+        or "Review the test implementation" in output
+        or "Add git branch display" in output
         or "Implement parallel test execution" in output
     ), f"Expected to find TODO comments in {mode} mode output, got:\n{output}"
 

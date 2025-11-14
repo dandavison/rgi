@@ -1,43 +1,51 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import shlex
 import subprocess
 import sys
 from pathlib import Path
+from typing import List, Tuple
 
 
-def main():
+def main() -> None:
     """Main entry point for rgi."""
     # Debug logging (disabled for now)
     # with open("/tmp/rgi-debug.log", "a") as f:
     #     f.write(f"rgi started with args: {sys.argv}\n")
 
     # Get absolute path to this script
-    SCRIPT_PATH = str(Path(__file__).resolve())
+    SCRIPT_PATH: str = str(Path(__file__).resolve())
 
     # Get directory containing this script
-    SCRIPT_DIR = str(Path(SCRIPT_PATH).parent)
+    SCRIPT_DIR: str = str(Path(SCRIPT_PATH).parent)
 
     # Add script directory to PATH so rgi-preview can be found
     os.environ["PATH"] = f"{SCRIPT_DIR}:{os.environ.get('PATH', '')}"
 
     # Parse command line arguments
+    mode: str
+    pattern: str
+    paths: List[str]
+    rg_opts: str
     mode, pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
 
     # Parse ripgrep config file
-    RIPGREP_CONFIG_PATH = os.environ.get("RIPGREP_CONFIG_PATH", "")
-    config_args = parse_ripgrep_config(RIPGREP_CONFIG_PATH)
+    RIPGREP_CONFIG_PATH: str = os.environ.get("RIPGREP_CONFIG_PATH", "")
+    config_args: str = parse_ripgrep_config(RIPGREP_CONFIG_PATH)
 
     # Implicit options that are always applied but never shown
-    IMPLICIT_OPTS = "--json"
+    IMPLICIT_OPTS: str = "--json"
 
     # Commands
     # Include config args explicitly (not via RIPGREP_CONFIG_PATH to avoid double application)
-    config_part = f" {config_args}" if config_args else ""
-    RG = f"rg{config_part}{rg_opts} {IMPLICIT_OPTS}"
-    DELTA = "delta --grep-output-type classic"
+    config_part: str = f" {config_args}" if config_args else ""
+    RG: str = f"rg{config_part}{rg_opts} {IMPLICIT_OPTS}"
+    DELTA: str = "delta --grep-output-type classic"
 
     # Build fzf command based on mode
+    fzf_cmd: List[str]
     if mode == "command":
         fzf_cmd = build_command_mode_fzf(
             pattern,
@@ -59,8 +67,8 @@ def main():
     # Run fzf with empty input
     # Need to pipe echo "" | fzf, so we'll use subprocess but with shell=True
     # to preserve the exact bash behavior
-    fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
-    full_cmd = f'echo "" | {fzf_cmd_str}'
+    fzf_cmd_str: str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
+    full_cmd: str = f'echo "" | {fzf_cmd_str}'
     sys.exit(subprocess.call(full_cmd, shell=True))
 
 
@@ -69,8 +77,11 @@ def main():
 # ============================================================================
 
 
-def parse_arguments(argv):
+def parse_arguments(argv: List[str]) -> Tuple[str, str, List[str], str]:
     """Parse command line arguments for rgi.
+
+    Args:
+        argv: Command line arguments (excluding program name)
 
     Returns:
         tuple: (mode, pattern, paths, rg_opts)
@@ -79,12 +90,12 @@ def parse_arguments(argv):
             - paths: list of paths to search
             - rg_opts: ripgrep options string
     """
-    pattern = ""
-    paths = []
-    rg_opts = ""
-    mode = "command"  # default mode
+    pattern: str = ""
+    paths: List[str] = []
+    rg_opts: str = ""
+    mode: str = "command"  # default mode
 
-    i = 0
+    i: int = 0
     while i < len(argv):
         if argv[i] == "--rgi-command-mode":
             mode = "command"
@@ -115,7 +126,7 @@ def parse_arguments(argv):
     return mode, pattern, paths, rg_opts
 
 
-def parse_ripgrep_config(config_path):
+def parse_ripgrep_config(config_path: str) -> str:
     """Parse ripgrep configuration file.
 
     Args:
@@ -127,7 +138,7 @@ def parse_ripgrep_config(config_path):
     if not config_path or not os.path.isfile(config_path):
         return ""
 
-    config_args = ""
+    config_args: str = ""
     with open(config_path, "r") as f:
         for line in f:
             # Trim leading/trailing whitespace
@@ -148,8 +159,12 @@ def parse_ripgrep_config(config_path):
     return config_args
 
 
-def fzf_base():
-    """Build base fzf options common to all modes."""
+def fzf_base() -> List[str]:
+    """Build base fzf options common to all modes.
+
+    Returns:
+        List of fzf base arguments
+    """
     return [
         "fzf",
         "--layout",
@@ -173,8 +188,15 @@ def fzf_base():
 
 
 def build_command_mode_fzf(
-    pattern, paths, rg_opts, config_args, RG, DELTA, RIPGREP_CONFIG_PATH, IMPLICIT_OPTS
-):
+    pattern: str,
+    paths: List[str],
+    rg_opts: str,
+    config_args: str,
+    RG: str,
+    DELTA: str,
+    RIPGREP_CONFIG_PATH: str,
+    IMPLICIT_OPTS: str,
+) -> List[str]:
     """Build fzf command for command mode.
 
     Args:
@@ -192,28 +214,29 @@ def build_command_mode_fzf(
     """
     # Command mode - show command WITHOUT config args in query (they're shown in header)
     # This prevents duplication when switching modes
-    paths_str = " ".join(paths)
+    paths_str: str = " ".join(paths)
     # Quote pattern for shell safety (shlex.quote handles spaces and special chars)
-    quoted_pattern = shlex.quote(pattern) if pattern else ""
-    full_command = f"rg{rg_opts} {quoted_pattern} {paths_str}"
+    quoted_pattern: str = shlex.quote(pattern) if pattern else ""
+    full_command: str = f"rg{rg_opts} {quoted_pattern} {paths_str}"
 
     # Show effective command including config in header
+    header: str
     if config_args:
         header = f"Config applied: {config_args}"
     else:
         header = ""
 
     # Build the complex bind strings
-    config_insert = f" {config_args}" if config_args else ""
+    config_insert: str = f" {config_args}" if config_args else ""
 
     # start:reload and change:reload bindings
-    reload_cmd = f'cmd={{q}}; if [[ "$cmd" =~ ^rg ]]; then cmd="${{cmd#rg}}"; cmd="rg{config_insert} {IMPLICIT_OPTS}$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {DELTA}'
+    reload_cmd: str = f'cmd={{q}}; if [[ "$cmd" =~ ^rg ]]; then cmd="${{cmd#rg}}"; cmd="rg{config_insert} {IMPLICIT_OPTS}$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {DELTA}'
 
     # tab:execute binding
-    ripgrep_env = (
+    ripgrep_env: str = (
         f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
     )
-    tab_execute = f"{ripgrep_env} rgi-switch-mode pattern {{q}}"
+    tab_execute: str = f"{ripgrep_env} rgi-switch-mode pattern {{q}}"
 
     return fzf_base() + [
         "-d:",
@@ -238,8 +261,14 @@ def build_command_mode_fzf(
 
 
 def build_pattern_mode_fzf(
-    pattern, paths, rg_opts, config_args, RG, DELTA, RIPGREP_CONFIG_PATH
-):
+    pattern: str,
+    paths: List[str],
+    rg_opts: str,
+    config_args: str,
+    RG: str,
+    DELTA: str,
+    RIPGREP_CONFIG_PATH: str,
+) -> List[str]:
     """Build fzf command for pattern mode.
 
     Args:
@@ -255,22 +284,26 @@ def build_pattern_mode_fzf(
         list: Complete fzf command as list of arguments
     """
     # Pattern mode - the query is just the search pattern
-    paths_str = " ".join(paths)
+    paths_str: str = " ".join(paths)
 
     # Quote pattern for display in fzf query (shlex.quote handles spaces and special chars)
-    query_pattern = shlex.quote(pattern) if pattern else ""
+    query_pattern: str = shlex.quote(pattern) if pattern else ""
 
     # Build the bind strings
     # For start_reload, always quote the pattern for shell safety
-    start_reload = f"RIPGREP_CONFIG_PATH= {RG} {shlex.quote(pattern) if pattern else ''} {paths_str} 2>/dev/null | {DELTA}"
-    change_reload = f"RIPGREP_CONFIG_PATH= {RG} {{q}} {paths_str} 2>/dev/null | {DELTA}"
+    start_reload: str = f"RIPGREP_CONFIG_PATH= {RG} {shlex.quote(pattern) if pattern else ''} {paths_str} 2>/dev/null | {DELTA}"
+    change_reload: str = (
+        f"RIPGREP_CONFIG_PATH= {RG} {{q}} {paths_str} 2>/dev/null | {DELTA}"
+    )
 
-    ripgrep_env = (
+    ripgrep_env: str = (
         f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
     )
-    tab_execute = f"{ripgrep_env} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
+    tab_execute: str = (
+        f"{ripgrep_env} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
+    )
 
-    header = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
+    header: str = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
 
     return fzf_base() + [
         "-d:",

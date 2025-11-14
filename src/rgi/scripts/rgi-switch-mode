@@ -14,18 +14,29 @@ Note: The --json option is automatically added by rgi for output formatting
 and should never be passed or shown in the UI.
 """
 
+from __future__ import annotations
+
 import os
 import re
+import shlex
 import signal
 import sys
 from pathlib import Path
+from typing import List, Tuple
 
 
-def parse_rg_command(cmd):
-    """Parse an rg command string to extract pattern, options, and paths."""
+def parse_rg_command(cmd: str) -> Tuple[str, str, str]:
+    """Parse an rg command string to extract pattern, options, and paths.
+
+    Args:
+        cmd: The rg command string to parse
+
+    Returns:
+        Tuple of (pattern, options, paths)
+    """
 
     # Implicit options that should never be shown or passed (rgi adds them automatically)
-    IMPLICIT_OPTIONS = ["--json"]
+    IMPLICIT_OPTIONS: List[str] = ["--json"]
 
     # Find the pattern in the command
     # First try to find --json (for backward compatibility)
@@ -55,17 +66,15 @@ def parse_rg_command(cmd):
         after_rg = cmd[rg_match.end() :].strip()
 
         # Split into tokens, handling quoted strings
-        import shlex
-
         try:
             tokens = shlex.split(after_rg)
         except:
             tokens = after_rg.split()
 
         # Separate options from pattern and paths
-        options = []
-        pattern = ""
-        paths = []
+        options: List[str] = []
+        pattern: str = ""
+        paths: List[str] = []
 
         i = 0
         while i < len(tokens):
@@ -95,8 +104,8 @@ def parse_rg_command(cmd):
                 paths.append(token)
             i += 1
 
-        options_part = " ".join(options)
-        after_json = pattern + " " + " ".join(paths) if paths else pattern
+        options_part: str = " ".join(options)
+        after_json: str = pattern + " " + " ".join(paths) if paths else pattern
 
     # Remove implicit options from the options part
     for implicit in IMPLICIT_OPTIONS:
@@ -135,9 +144,18 @@ def parse_rg_command(cmd):
     return pattern, options_part, paths
 
 
-def switch_to_pattern_mode(query, rg_opts, paths):
-    """Switch from command mode to pattern mode."""
+def switch_to_pattern_mode(query: str, rg_opts: str, paths: List[str]) -> None:
+    """Switch from command mode to pattern mode.
+
+    Args:
+        query: The current fzf query string
+        rg_opts: Ripgrep options
+        paths: Paths to search
+    """
     # Parse the rg command to extract pattern and options
+    pattern: str
+    options: str
+    parsed_paths: str
     pattern, options, parsed_paths = parse_rg_command(query)
 
     # Use parsed paths from the command - they're more up-to-date than the original paths
@@ -148,22 +166,18 @@ def switch_to_pattern_mode(query, rg_opts, paths):
         paths = ["."]
 
     # Get the rgi script path (same directory as this script)
-    script_dir = Path(__file__).parent
-    rgi_path = script_dir / "rgi"
+    script_dir: Path = Path(__file__).parent
+    rgi_path: Path = script_dir / "rgi"
 
     # Build the new rgi command
-    args = [str(rgi_path)]
+    args: List[str] = [str(rgi_path)]
 
     # Add any existing rg_opts
     if rg_opts:
-        import shlex
-
         args.extend(shlex.split(rg_opts))
 
     # Add extracted options if any
     if options:
-        import shlex
-
         args.extend(shlex.split(options))
 
     # Add pattern mode flag
@@ -177,19 +191,23 @@ def switch_to_pattern_mode(query, rg_opts, paths):
     os.execvp(args[0], args)
 
 
-def switch_to_command_mode(pattern, rg_opts, paths):
-    """Switch from pattern mode to command mode."""
+def switch_to_command_mode(pattern: str, rg_opts: str, paths: List[str]) -> None:
+    """Switch from pattern mode to command mode.
+
+    Args:
+        pattern: The search pattern
+        rg_opts: Ripgrep options
+        paths: Paths to search
+    """
     # Get the rgi script path (same directory as this script)
-    script_dir = Path(__file__).parent
-    rgi_path = script_dir / "rgi"
+    script_dir: Path = Path(__file__).parent
+    rgi_path: Path = script_dir / "rgi"
 
     # Build the new rgi command
-    args = [str(rgi_path)]
+    args: List[str] = [str(rgi_path)]
 
     # Add any rg_opts
     if rg_opts:
-        import shlex
-
         args.extend(shlex.split(rg_opts))
 
     # Add command mode flag
@@ -203,7 +221,7 @@ def switch_to_command_mode(pattern, rg_opts, paths):
     os.execvp(args[0], args)
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 3:
         print(
             "Usage: rgi-switch-mode <target-mode> <query> [rg-opts] [paths...]",
@@ -211,16 +229,16 @@ def main():
         )
         sys.exit(1)
 
-    target_mode = sys.argv[1]
-    query = sys.argv[2]
+    target_mode: str = sys.argv[1]
+    query: str = sys.argv[2]
 
     # Parse remaining args - everything before paths starting with - is rg_opts
-    remaining_args = sys.argv[3:] if len(sys.argv) > 3 else []
-    rg_opts = []
-    paths = []
+    remaining_args: List[str] = sys.argv[3:] if len(sys.argv) > 3 else []
+    rg_opts: List[str] = []
+    paths: List[str] = []
 
     # Separate options from paths
-    i = 0
+    i: int = 0
     while i < len(remaining_args):
         arg = remaining_args[i]
         if arg.startswith("-"):
