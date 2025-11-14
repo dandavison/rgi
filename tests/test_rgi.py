@@ -56,7 +56,7 @@ def run_rgi_test(command: str, sleep_time: float = 0.5) -> str:
     # In CI, we might need more time for processes to start
     if os.environ.get("CI") == "true":
         sleep_time += 0.5
-    
+
     result = subprocess.run(
         [TEST_INTERACTIVE, command, str(sleep_time)],
         capture_output=True,

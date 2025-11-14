@@ -6,8 +6,8 @@
 #   command: The command to run (will be executed with bash -c)
 #   sleep_time: How long to wait before capturing (default 0.5 seconds)
 #
-# Example: 
-#   test-interactive "rgi TODO ." 
+# Example:
+#   test-interactive "rgi TODO ."
 #   test-interactive "fzf --query=test" 1
 
 if [[ $# -eq 0 ]]; then
