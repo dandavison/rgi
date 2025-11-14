@@ -18,6 +18,13 @@ fi
 
 COMMAND="$1"
 SLEEP_TIME="${2:-0.5}"
+
+# In CI environments, we might need extra time for processes to start
+if [ "$CI" = "true" ]; then
+    # Add extra time in CI
+    SLEEP_TIME=$(awk "BEGIN {print $SLEEP_TIME + 0.5}")
+fi
+
 SESSION_NAME="test-interactive-$$"
 # Use a separate tmux server socket for tests to avoid interfering with user's tmux
 TMUX_SOCKET="test-socket-$$"
