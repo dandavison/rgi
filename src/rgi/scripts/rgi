@@ -8,19 +8,17 @@ from pathlib import Path
 
 def main():
     """Main entry point for rgi."""
-    SCRIPT_PATH = str(Path(__file__).resolve())
-    SCRIPT_DIR = str(Path(SCRIPT_PATH).parent)
-    os.environ["PATH"] = f"{SCRIPT_DIR}:{os.environ.get('PATH', '')}"
+    script_dir = str(Path(__file__).resolve().parent)
+    os.environ["PATH"] = f"{script_dir}:{os.environ.get('PATH', '')}"
 
     mode, pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
 
-    RIPGREP_CONFIG_PATH = os.environ.get("RIPGREP_CONFIG_PATH", "")
-    config_args = parse_ripgrep_config(RIPGREP_CONFIG_PATH)
+    ripgrep_config_path = os.environ.get("RIPGREP_CONFIG_PATH", "")
+    config_args = parse_ripgrep_config(ripgrep_config_path)
 
-    IMPLICIT_OPTS = "--json"
-    config_part = f" {config_args}" if config_args else ""
-    RG = f"rg{config_part}{rg_opts} {IMPLICIT_OPTS}"
-    DELTA = "delta --grep-output-type classic"
+    implicit_opts = "--json"
+    rg = f"rg{' ' + config_args if config_args else ''}{rg_opts} {implicit_opts}"
+    delta = "delta --grep-output-type classic"
 
     if mode == "command":
         fzf_cmd = build_command_mode_fzf(
@@ -28,14 +26,14 @@ def main():
             paths,
             rg_opts,
             config_args,
-            RG,
-            DELTA,
-            RIPGREP_CONFIG_PATH,
-            IMPLICIT_OPTS,
+            rg,
+            delta,
+            ripgrep_config_path,
+            implicit_opts,
         )
     elif mode == "pattern":
         fzf_cmd = build_pattern_mode_fzf(
-            pattern, paths, rg_opts, config_args, RG, DELTA, RIPGREP_CONFIG_PATH
+            pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path
         )
     else:
         sys.exit(1)
@@ -132,7 +130,7 @@ def fzf_base():
 
 
 def build_command_mode_fzf(
-    pattern, paths, rg_opts, config_args, RG, DELTA, RIPGREP_CONFIG_PATH, IMPLICIT_OPTS
+    pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path, implicit_opts
 ):
     """Build fzf command for command mode."""
     paths_str = " ".join(paths)
@@ -146,13 +144,13 @@ def build_command_mode_fzf(
         cmd={{q}};
         if [[ "$cmd" =~ ^rg ]]; then
             cmd="${{cmd#rg}}";
-            cmd="rg{config_insert} {IMPLICIT_OPTS}$cmd";
+            cmd="rg{config_insert} {implicit_opts}$cmd";
         fi;
-        RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {DELTA}
+        RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
     """.replace("\n", " ").strip()
 
     env_prefix = (
-        f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
+        f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     )
     tab_execute = f"{env_prefix} rgi-switch-mode pattern {{q}}"
 
@@ -179,20 +177,16 @@ def build_command_mode_fzf(
 
 
 def build_pattern_mode_fzf(
-    pattern, paths, rg_opts, config_args, RG, DELTA, RIPGREP_CONFIG_PATH
+    pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path
 ):
     """Build fzf command for pattern mode."""
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
 
-    start_reload = (
-        f"RIPGREP_CONFIG_PATH= {RG} {quoted_pattern} {paths_str} 2>/dev/null | {DELTA}"
-    )
-    change_reload = f"RIPGREP_CONFIG_PATH= {RG} {{q}} {paths_str} 2>/dev/null | {DELTA}"
+    start_reload = f"RIPGREP_CONFIG_PATH= {rg} {quoted_pattern} {paths_str} 2>/dev/null | {delta}"
+    change_reload = f"RIPGREP_CONFIG_PATH= {rg} {{q}} {paths_str} 2>/dev/null | {delta}"
 
-    env_prefix = (
-        f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
-    )
+    env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
 
     header = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
