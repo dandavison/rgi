@@ -139,43 +139,34 @@ def build_command_mode_fzf(
         else ":"  # no-op if no config
     )
 
-    bindings = [
-        "-d:",
-        "--query",
-        f"{full_command} ",
-        "--phony",
-        "--bind",
-        f"start:reload:{reload_cmd}",
-        "--bind",
-        "start:backward-delete-char",
-        "--bind",
-        f"change:reload:{reload_cmd}",
-        "--bind",
-        f"tab:execute:{tab_execute}",
-        "--bind",
-        "enter:execute:open-in-editor {1} {2}",
-    ]
-
-    if ripgrep_config_path:
-        bindings.extend(
-            [
-                "--bind",
-                f"ctrl-r:execute:{ctrl_r_execute}",
-            ]
-        )
-
-    header = config_args if config_args else ""
-
-    return (
-        fzf_base()
-        + bindings
-        + [
+    cmd = fzf_base()
+    cmd.extend(
+        [
+            "-d:",
+            "--query",
+            f"{full_command} ",
+            "--phony",
             "--header",
-            header,
+            config_args if config_args else "",
             "--preview",
             "[[ -n {1} ]] && rgi-preview {1} {2}",
+            "--bind",
+            f"start:reload:{reload_cmd}",
+            "--bind",
+            "start:backward-delete-char",
+            "--bind",
+            f"change:reload:{reload_cmd}",
+            "--bind",
+            f"tab:execute:{tab_execute}",
+            "--bind",
+            "enter:execute:open-in-editor {1} {2}",
         ]
     )
+
+    if ripgrep_config_path:
+        cmd.extend(["--bind", f"ctrl-r:execute:{ctrl_r_execute}"])
+
+    return cmd
 
 
 def build_pattern_mode_fzf(
@@ -203,43 +194,22 @@ def build_pattern_mode_fzf(
         else ":"  # no-op if no config
     )
 
-    bindings = [
-        "-d:",
-        "--query",
-        f"{quoted_pattern} ",
-        "--phony",
-        "--bind",
-        f"start:reload:{start_reload}",
-        "--bind",
-        "start:backward-delete-char",
-        "--bind",
-        f"change:reload:{change_reload}",
-        "--bind",
-        f"tab:execute:{tab_execute}",
-        "--bind",
-        "enter:execute:open-in-editor {1} {2}",
-    ]
+    cmd = fzf_base()
+    cmd.extend([
+        "-d:", "--query", f"{quoted_pattern} ", "--phony",
+        "--header", f"rg{config_args}{rg_opts} {{q}} {paths_str}",
+        "--preview", "[[ -n {1} ]] && rgi-preview {1} {2}",
+        "--bind", f"start:reload:{start_reload}",
+        "--bind", "start:backward-delete-char",
+        "--bind", f"change:reload:{change_reload}",
+        "--bind", f"tab:execute:{tab_execute}",
+        "--bind", "enter:execute:open-in-editor {1} {2}",
+    ])
 
     if ripgrep_config_path:
-        bindings.extend(
-            [
-                "--bind",
-                f"ctrl-r:execute:{ctrl_r_execute}",
-            ]
-        )
+        cmd.extend(["--bind", f"ctrl-r:execute:{ctrl_r_execute}"])
 
-    header = f"rg {config_args} {rg_opts} {{q}} {paths_str}"
-
-    return (
-        fzf_base()
-        + bindings
-        + [
-            "--header",
-            header,
-            "--preview",
-            "[[ -n {1} ]] && rgi-preview {1} {2}",
-        ]
-    )
+    return cmd
 
 
 if __name__ == "__main__":
