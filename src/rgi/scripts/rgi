@@ -7,7 +7,6 @@ from pathlib import Path
 
 
 def main() -> None:
-    """Main entry point for rgi."""
     script_dir = str(Path(__file__).resolve().parent)
     os.environ["PATH"] = f"{script_dir}:{os.environ.get('PATH', '')}"
 
@@ -20,33 +19,24 @@ def main() -> None:
     rg = f"rg {config_args} {rg_opts} {implicit_opts}"
     delta = "delta --grep-output-type classic"
 
-    if mode == "command":
-        fzf_cmd = build_command_mode_fzf(
-            pattern,
-            paths,
-            rg_opts,
-            config_args,
-            rg,
-            delta,
-            ripgrep_config_path,
-            implicit_opts,
+    fzf_cmd = (
+        build_command_mode_fzf(
+            pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path, implicit_opts
         )
-    elif mode == "pattern":
-        fzf_cmd = build_pattern_mode_fzf(
+        if mode == "command"
+        else build_pattern_mode_fzf(
             pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path
         )
-    else:
-        sys.exit(1)
+    )
 
     fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
     sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True))
 
 
 def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
-    """Parse command line arguments for rgi."""
     pattern = ""
     paths = []
-    rg_opts_list = []
+    rg_opts = ""
     mode = "command"
 
     i = 0
@@ -59,12 +49,11 @@ def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
             i += 1
         elif argv[i].startswith("-"):
             opt = argv[i]
-            rg_opts_list.append(opt)
+            rg_opts += f" {opt}"
             i += 1
-            if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"]:
-                if i < len(argv):
-                    rg_opts_list.append(f"'{argv[i]}'")
-                    i += 1
+            if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"] and i < len(argv):
+                rg_opts += f" '{argv[i]}'"
+                i += 1
         else:
             break
 
@@ -75,16 +64,14 @@ def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
         paths.append(argv[i])
         i += 1
 
-    rg_opts = " ".join(rg_opts_list)
-    return mode, pattern, paths, rg_opts
+    return mode, pattern, paths, rg_opts.strip()
 
 
 def parse_ripgrep_config(config_path: str) -> str:
-    """Parse ripgrep config file and return as command line args string."""
     if not config_path or not os.path.isfile(config_path):
         return ""
 
-    config_args = []
+    config_args = ""
     with open(config_path, "r") as f:
         for line in f:
             line = line.strip()
@@ -92,13 +79,12 @@ def parse_ripgrep_config(config_path: str) -> str:
                 continue
             if not line.startswith("-"):
                 line = f"'{line}'"
-            config_args.append(line)
+            config_args += f" {line}"
 
-    return " ".join(config_args)
+    return config_args.strip()
 
 
 def fzf_base() -> list[str]:
-    """Base fzf options common to all modes."""
     return [
         "fzf",
         "--layout",
@@ -131,23 +117,18 @@ def build_command_mode_fzf(
     ripgrep_config_path: str,
     implicit_opts: str,
 ) -> list[str]:
-    """Build fzf command for command mode."""
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
     full_command = f"rg {rg_opts} {quoted_pattern} {paths_str}"
 
-    header = config_args
-
-    rg_prefix = f"rg {config_args} {implicit_opts}"
-
     reload_cmd = f"""
-cmd={{q}};
-if [[ "$cmd" =~ ^rg ]]; then
-    cmd="${{cmd#rg}}";
-    cmd="{rg_prefix}$cmd";
-fi;
-RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
-""".replace("\n", " ").strip()
+        cmd={{q}};
+        if [[ "$cmd" =~ ^rg ]]; then
+            cmd="${{cmd#rg}}";
+            cmd="rg {config_args} {implicit_opts}$cmd";
+        fi;
+        RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+    """.replace("\n", " ").strip()
 
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode pattern {{q}}"
@@ -168,7 +149,7 @@ RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
         "--bind",
         "enter:execute:open-in-editor {1} {2}",
         "--header",
-        header,
+        config_args,
         "--preview",
         "[[ -n {1} ]] && rgi-preview {1} {2}",
     ]
@@ -183,7 +164,6 @@ def build_pattern_mode_fzf(
     delta: str,
     ripgrep_config_path: str,
 ) -> list[str]:
-    """Build fzf command for pattern mode."""
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
 
@@ -191,9 +171,7 @@ def build_pattern_mode_fzf(
     change_reload = f"RIPGREP_CONFIG_PATH= {rg} {{q}} {paths_str} 2>/dev/null | {delta}"
 
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
-    tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
-
-    header = f"rg {config_args} {rg_opts} {{q}} {paths_str}"
+    tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str}"
 
     return fzf_base() + [
         "-d:",
@@ -211,7 +189,7 @@ def build_pattern_mode_fzf(
         "--bind",
         "enter:execute:open-in-editor {1} {2}",
         "--header",
-        header,
+        f"rg {config_args} {rg_opts} {{q}} {paths_str}",
         "--preview",
         "[[ -n {1} ]] && rgi-preview {1} {2}",
     ]
