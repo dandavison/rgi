@@ -184,9 +184,7 @@ def test_glob_filter_python_files(test_fixture_dir, rgi_path, mode):
     assert "lib_prompt.sh" not in output, (
         f"Did not expect 'lib_prompt.sh' in {mode} mode output, got:\n{output}"
     )
-    assert "app.js" not in output, (
-        f"Did not expect 'app.js' in {mode} mode output, got:\n{output}"
-    )
+    assert "app.js" not in output, f"Did not expect 'app.js' in {mode} mode output, got:\n{output}"
 
 
 @pytest.mark.parametrize("mode", ["pattern", "command"])
@@ -269,15 +267,11 @@ def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path):
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Switch back to pattern mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Capture output
@@ -332,15 +326,11 @@ def test_typing_in_command_mode(test_fixture_dir, rgi_path):
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Add a space to trigger reload
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, " "), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, " "), check=True)
         time.sleep(1.5)
 
         # Capture output
@@ -398,15 +388,11 @@ def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Clear the command line
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "C-u"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "C-u"), check=True)
 
         # Type a new command searching for TODO
         subprocess.run(
@@ -472,9 +458,7 @@ def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Go to end of line and edit path from . to shell-config
@@ -491,9 +475,7 @@ def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
         time.sleep(1.5)
 
         # Switch back to pattern mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Capture output
@@ -547,9 +529,7 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path):
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Go to beginning and skip past 'rg' and options
@@ -557,9 +537,7 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path):
             tmux_cmd(socket, "send-keys", "-t", session_name, "C-a"), check=True
         )  # Go to beginning
         subprocess.run(
-            tmux_cmd(
-                socket, "send-keys", "-t", session_name, "M-f", "M-f", "M-f", "M-f"
-            ),
+            tmux_cmd(socket, "send-keys", "-t", session_name, "M-f", "M-f", "M-f", "M-f"),
             check=True,
         )  # Skip words
         subprocess.run(
@@ -569,9 +547,7 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path):
         time.sleep(1.5)
 
         # Switch back to pattern mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Capture output
@@ -625,21 +601,15 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path):
         time.sleep(1.5)
 
         # Switch to command mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Switch back to pattern mode
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Switch to command mode again
-        subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True
-        )
+        subprocess.run(tmux_cmd(socket, "send-keys", "-t", session_name, "Tab"), check=True)
         time.sleep(1.5)
 
         # Capture output
@@ -667,9 +637,7 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path):
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
-@pytest.mark.xfail(
-    reason="Known issue: patterns with spaces not working on initial launch"
-)
+@pytest.mark.xfail(reason="Known issue: patterns with spaces not working on initial launch")
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_patterns_with_spaces(test_fixture_dir, rgi_path, mode):
     """Test 16: Patterns with spaces work correctly in both modes.

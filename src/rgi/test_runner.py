@@ -2,8 +2,8 @@
 Test runner for rgi test suite
 """
 
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -22,9 +22,7 @@ def run_tests():
         sys.exit(1)
 
     if not test_interactive.exists():
-        print(
-            f"Error: test-interactive not found at {test_interactive}", file=sys.stderr
-        )
+        print(f"Error: test-interactive not found at {test_interactive}", file=sys.stderr)
         sys.exit(1)
 
     # Make sure test files are executable

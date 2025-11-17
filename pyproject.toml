@@ -39,6 +39,7 @@ test = [
 dev = [
     "ty",
     "ruff",
+    "poethepoet>=0.24.0",
 ]
 
 [build-system]
@@ -55,14 +56,20 @@ rgi = ["scripts/*"]
 [tool.uv]
 package = true
 
-[tool.uv.scripts]
-check = "python check.py"
-format = "ruff format ."
+[tool.poe.tasks]
+check = [
+    { cmd = "ty check" },
+    { cmd = "ruff check" },
+    { cmd = "ruff format --check" },
+]
+format = [
+    { cmd = "ruff check --select I --fix" },
+    { cmd = "ruff format" },
+]
+lint = { ref = "check" }
+test = "pytest"
 
 [tool.ty]
-python-version = "3.10"
-strict = false
-include = ["src/**/*.py"]
 
 [tool.ruff]
 line-length = 100

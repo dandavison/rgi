@@ -147,9 +147,7 @@ fi;
 RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
 """.replace("\n", " ")
 
-    env_prefix = (
-        f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
-    )
+    env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode pattern {{q}}"
 
     return fzf_base() + [
@@ -187,14 +185,10 @@ def build_pattern_mode_fzf(
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
 
-    start_reload = (
-        f"RIPGREP_CONFIG_PATH= {rg} {quoted_pattern} {paths_str} 2>/dev/null | {delta}"
-    )
+    start_reload = f"RIPGREP_CONFIG_PATH= {rg} {quoted_pattern} {paths_str} 2>/dev/null | {delta}"
     change_reload = f"RIPGREP_CONFIG_PATH= {rg} {{q}} {paths_str} 2>/dev/null | {delta}"
 
-    env_prefix = (
-        f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
-    )
+    env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
 
     header = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"

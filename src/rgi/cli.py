@@ -2,8 +2,8 @@
 CLI entry point for rgi
 """
 
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 
