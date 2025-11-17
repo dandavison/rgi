@@ -17,7 +17,8 @@ def main() -> None:
     config_args = parse_ripgrep_config(ripgrep_config_path)
 
     implicit_opts = "--json"
-    rg = f"rg{' ' + config_args if config_args else ''}{rg_opts} {implicit_opts}"
+    rg_parts = ["rg"] + [p for p in [config_args, rg_opts, implicit_opts] if p]
+    rg = " ".join(rg_parts)
     delta = "delta --grep-output-type classic"
 
     if mode == "command":
@@ -46,7 +47,7 @@ def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
     """Parse command line arguments for rgi."""
     pattern = ""
     paths = []
-    rg_opts = ""
+    rg_opts_list = []
     mode = "command"
 
     i = 0
@@ -59,11 +60,11 @@ def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
             i += 1
         elif argv[i].startswith("-"):
             opt = argv[i]
-            rg_opts += f" {opt}"
+            rg_opts_list.append(opt)
             i += 1
             if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"]:
                 if i < len(argv):
-                    rg_opts += f" '{argv[i]}'"
+                    rg_opts_list.append(f"'{argv[i]}'")
                     i += 1
         else:
             break
@@ -75,6 +76,7 @@ def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
         paths.append(argv[i])
         i += 1
 
+    rg_opts = " ".join(rg_opts_list)
     return mode, pattern, paths, rg_opts
 
 
@@ -133,19 +135,24 @@ def build_command_mode_fzf(
     """Build fzf command for command mode."""
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
-    full_command = f"rg{rg_opts} {quoted_pattern} {paths_str}"
+    # Build full command without config_args (shown in header instead)
+    cmd_parts = ["rg"] + [p for p in [rg_opts, quoted_pattern, paths_str] if p]
+    full_command = " ".join(cmd_parts)
 
-    header = f"{config_args}" if config_args else ""
+    header = config_args
 
-    config_insert = f" {config_args}" if config_args else ""
+    # Build the prefix for when we rebuild the command
+    rg_prefix_parts = ["rg"] + [p for p in [config_args, implicit_opts] if p]
+    rg_prefix = " ".join(rg_prefix_parts)
+    
     reload_cmd = f"""
 cmd={{q}};
 if [[ "$cmd" =~ ^rg ]]; then
     cmd="${{cmd#rg}}";
-    cmd="rg{config_insert} {implicit_opts}$cmd";
+    cmd="{rg_prefix}$cmd";
 fi;
 RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
-""".replace("\n", " ")
+""".replace("\n", " ").strip()
 
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode pattern {{q}}"
@@ -191,7 +198,9 @@ def build_pattern_mode_fzf(
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
 
-    header = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
+    # Build header showing the effective command
+    header_parts = ["rg"] + [p for p in [config_args, rg_opts, "{q}", paths_str] if p]
+    header = " ".join(header_parts)
 
     return fzf_base() + [
         "-d:",
