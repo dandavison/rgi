@@ -15,8 +15,8 @@ def main() -> None:
     ripgrep_config_path = os.environ.get("RIPGREP_CONFIG_PATH", "")
     config_args = parse_ripgrep_config(ripgrep_config_path)
 
-    implicit_opts = "--json"
-    rg = f"rg {config_args} {rg_opts} {implicit_opts}"
+    implicit_opts = " --json"
+    rg = f"rg{config_args}{rg_opts}{implicit_opts}"
     delta = "delta --grep-output-type classic"
 
     fzf_cmd = (
@@ -118,7 +118,7 @@ def build_command_mode_fzf(
 ) -> list[str]:
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
-    full_command = f"rg {rg_opts} {quoted_pattern} {paths_str}"
+    full_command = f"rg{rg_opts} {quoted_pattern} {paths_str}"
 
     reload_cmd = f"""
         cmd={{q}};
