@@ -38,17 +38,8 @@ def main():
     else:
         sys.exit(1)
 
-    # Run fzf with empty input
-    # Need to pipe echo "" | fzf, so we'll use subprocess but with shell=True
-    # to preserve the exact bash behavior
-    fzf_cmd_str: str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
-    full_cmd: str = f'echo "" | {fzf_cmd_str}'
-    sys.exit(subprocess.call(full_cmd, shell=True))
-
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
+    fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
+    sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True))
 
 
 def parse_arguments(argv):
@@ -183,10 +174,14 @@ def build_pattern_mode_fzf(
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
 
-    start_reload = f"RIPGREP_CONFIG_PATH= {rg} {quoted_pattern} {paths_str} 2>/dev/null | {delta}"
+    start_reload = (
+        f"RIPGREP_CONFIG_PATH= {rg} {quoted_pattern} {paths_str} 2>/dev/null | {delta}"
+    )
     change_reload = f"RIPGREP_CONFIG_PATH= {rg} {{q}} {paths_str} 2>/dev/null | {delta}"
 
-    env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
+    env_prefix = (
+        f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
+    )
     tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
 
     header = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
