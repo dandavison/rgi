@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 
-def main():
+def main() -> None:
     """Main entry point for rgi."""
     script_dir = str(Path(__file__).resolve().parent)
     os.environ["PATH"] = f"{script_dir}:{os.environ.get('PATH', '')}"
@@ -42,7 +42,7 @@ def main():
     sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True))
 
 
-def parse_arguments(argv):
+def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
     """Parse command line arguments for rgi."""
     pattern = ""
     paths = []
@@ -78,7 +78,7 @@ def parse_arguments(argv):
     return mode, pattern, paths, rg_opts
 
 
-def parse_ripgrep_config(config_path):
+def parse_ripgrep_config(config_path: str) -> str:
     """Parse ripgrep config file and return as command line args string."""
     if not config_path or not os.path.isfile(config_path):
         return ""
@@ -96,7 +96,7 @@ def parse_ripgrep_config(config_path):
     return " ".join(config_args)
 
 
-def fzf_base():
+def fzf_base() -> list[str]:
     """Base fzf options common to all modes."""
     return [
         "fzf",
@@ -121,8 +121,15 @@ def fzf_base():
 
 
 def build_command_mode_fzf(
-    pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path, implicit_opts
-):
+    pattern: str,
+    paths: list[str],
+    rg_opts: str,
+    config_args: str,
+    rg: str,
+    delta: str,
+    ripgrep_config_path: str,
+    implicit_opts: str,
+) -> list[str]:
     """Build fzf command for command mode."""
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
@@ -168,8 +175,14 @@ RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
 
 
 def build_pattern_mode_fzf(
-    pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path
-):
+    pattern: str,
+    paths: list[str],
+    rg_opts: str,
+    config_args: str,
+    rg: str,
+    delta: str,
+    ripgrep_config_path: str,
+) -> list[str]:
     """Build fzf command for pattern mode."""
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""

@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Generator, List
+from typing import Generator, List
 
 import pytest
 
