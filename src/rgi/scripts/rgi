@@ -187,6 +187,43 @@ def fzf_base() -> List[str]:
     ]
 
 
+def _build_command_mode_reload(config_args: str, implicit_opts: str, delta_cmd: str) -> str:
+    """Build the reload command for command mode in a clean, documented way.
+    
+    This command handles user input from fzf's query field:
+    1. Captures the query (available as {q})
+    2. If it starts with 'rg', strips that prefix
+    3. Rebuilds the command with proper config and options
+    4. Executes with RIPGREP_CONFIG_PATH cleared to avoid double-application
+    5. Pipes through delta for formatting
+    
+    Args:
+        config_args: Config arguments to insert (e.g., " --max-columns=150")
+        implicit_opts: Options always applied but not shown (e.g., "--json")
+        delta_cmd: The delta command for output formatting
+        
+    Returns:
+        A single-line bash command suitable for fzf's --bind option
+    """
+    # Build the command components
+    capture_query = 'cmd={q}'
+    
+    # Process commands starting with 'rg'
+    config_insert = f" {config_args}" if config_args else ""
+    process_rg_prefix = (
+        'if [[ "$cmd" =~ ^rg ]]; then '
+        'cmd="${cmd#rg}"; '  # Remove 'rg' prefix
+        f'cmd="rg{config_insert} {implicit_opts}$cmd"; '  # Rebuild with our options
+        'fi'
+    )
+    
+    # Execute with environment control and pipe through delta
+    execute_and_format = f'RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta_cmd}'
+    
+    # Combine all parts
+    return f'{capture_query}; {process_rg_prefix}; {execute_and_format}'
+
+
 def build_command_mode_fzf(
     pattern: str,
     paths: List[str],
@@ -226,11 +263,8 @@ def build_command_mode_fzf(
     else:
         header = ""
 
-    # Build the complex bind strings
-    config_insert: str = f" {config_args}" if config_args else ""
-
-    # start:reload and change:reload bindings
-    reload_cmd: str = f'cmd={{q}}; if [[ "$cmd" =~ ^rg ]]; then cmd="${{cmd#rg}}"; cmd="rg{config_insert} {IMPLICIT_OPTS}$cmd"; fi; RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {DELTA}'
+    # Build the reload command in a clean, documented way
+    reload_cmd: str = _build_command_mode_reload(config_args, IMPLICIT_OPTS, DELTA)
 
     # tab:execute binding
     ripgrep_env: str = (

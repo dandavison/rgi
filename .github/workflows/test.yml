@@ -128,12 +128,23 @@ jobs:
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          # Use standard Python tools for Windows/WSL - more reliable than uv
-          python3 -m venv .venv
-          source .venv/bin/activate
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install pytest pytest-timeout
+          # Use standard Python tools for Windows/WSL
+          echo "Creating virtual environment..."
+          python3 -m venv .venv || { echo "Failed to create venv"; exit 1; }
+          
+          echo "Activating virtual environment..."
+          source .venv/bin/activate || { echo "Failed to activate venv"; exit 1; }
+          
+          echo "Upgrading pip and installing build tools..."
+          python -m pip install --upgrade pip setuptools wheel || { echo "Failed to upgrade pip"; exit 1; }
+          
+          echo "Installing package in editable mode..."
+          pip install -e . || { echo "Failed to install package"; exit 1; }
+          
+          echo "Installing test dependencies..."
+          pip install pytest pytest-timeout || { echo "Failed to install test deps"; exit 1; }
+          
+          echo "Python dependencies installed successfully"
 
       - name: Verify installations in WSL
         shell: wsl-bash {0}

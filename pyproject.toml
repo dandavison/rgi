@@ -4,9 +4,7 @@ version = "0.1.0"
 description = "Interactive file search via ripgrep, fzf, bat, and delta"
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = [
-    "pytest-pretty>=1.2.0",
-]
+dependencies = []
 authors = [
     { name = "Dan Davison", email = "dandavison7@gmail.com" }
 ]
@@ -40,8 +38,15 @@ test = [
 ]
 
 [build-system]
-requires = ["uv_build>=0.9.6,<0.10.0"]
-build-backend = "uv_build"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["rgi"]
+
+[tool.setuptools.package-data]
+rgi = ["scripts/*"]
 
 [tool.uv]
 package = true
