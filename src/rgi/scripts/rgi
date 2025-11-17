@@ -128,7 +128,7 @@ def build_command_mode_fzf(
     quoted_pattern = shlex.quote(pattern) if pattern else ""
     full_command = f"rg{rg_opts} {quoted_pattern} {paths_str}"
 
-    header = f"Config applied: {config_args}" if config_args else ""
+    header = f"{config_args}" if config_args else ""
 
     config_insert = f" {config_args}" if config_args else ""
     reload_cmd = f"""
