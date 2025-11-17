@@ -124,27 +124,21 @@ jobs:
       # Skip delta installation on Windows - it's not essential for tests
       # and causes hanging issues in CI
 
-      - name: Install Python dependencies in WSL
+      - name: Install minimal test dependencies in WSL
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          # Use standard Python tools for Windows/WSL
-          echo "Creating virtual environment..."
-          python3 -m venv .venv || { echo "Failed to create venv"; exit 1; }
+          # Minimal setup for Windows - just copy scripts and install pytest
+          echo "Installing pytest with system Python..."
+          python3 -m pip install --user pytest pytest-timeout || { echo "Failed to install pytest"; exit 1; }
           
-          echo "Activating virtual environment..."
-          source .venv/bin/activate || { echo "Failed to activate venv"; exit 1; }
+          echo "Making scripts available..."
+          mkdir -p ~/.local/bin
+          cp src/rgi/scripts/* ~/.local/bin/
+          chmod +x ~/.local/bin/rgi*
+          export PATH="$HOME/.local/bin:$PATH"
           
-          echo "Upgrading pip and installing build tools..."
-          python -m pip install --upgrade pip setuptools wheel || { echo "Failed to upgrade pip"; exit 1; }
-          
-          echo "Installing package in editable mode..."
-          pip install -e . || { echo "Failed to install package"; exit 1; }
-          
-          echo "Installing test dependencies..."
-          pip install pytest pytest-timeout || { echo "Failed to install test deps"; exit 1; }
-          
-          echo "Python dependencies installed successfully"
+          echo "Minimal dependencies installed successfully"
 
       - name: Verify installations in WSL
         shell: wsl-bash {0}
@@ -152,10 +146,8 @@ jobs:
         run: |
           echo "=== System info ==="
           uname -a
-          echo "=== Python version (system) ==="
+          echo "=== Python version ==="
           python3 --version
-          echo "=== Python version (venv) ==="
-          source .venv/bin/activate && python --version
           echo "=== tmux version ==="
           tmux -V
           echo "=== ripgrep version ==="
@@ -163,7 +155,10 @@ jobs:
           echo "=== fzf version ==="
           fzf --version
           echo "=== pytest installed ==="
-          source .venv/bin/activate && python -m pytest --version || echo "pytest not found"
+          python3 -m pytest --version || echo "pytest not found"
+          echo "=== rgi script available ==="
+          export PATH="$HOME/.local/bin:$PATH"
+          which rgi || echo "rgi not found"
           echo "=== Note: Delta not installed on Windows CI ==="
 
       - name: Run tests in WSL
@@ -172,13 +167,11 @@ jobs:
         run: |
           export TERM=xterm-256color
           export CI=true
+          export PATH="$HOME/.local/bin:$PATH"
           
-          # Activate venv
-          source .venv/bin/activate
-          
-          # Run a subset of tests for Windows
-          python -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60 || true
-          python -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60 || true
+          # Run a subset of tests for Windows with system Python
+          python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60 || true
+          python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60 || true
 
       - name: Upload test results on failure
         if: failure()
