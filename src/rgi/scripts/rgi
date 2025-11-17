@@ -132,11 +132,22 @@ def build_command_mode_fzf(
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode pattern {{q}}"
 
-    return fzf_base() + [
+    # Toggle config off if it's active
+    ctrl_r_execute = (
+        "RIPGREP_CONFIG_PATH= rgi --rgi-command-mode {q}"
+        if ripgrep_config_path
+        else ":"  # no-op if no config
+    )
+
+    cmd = fzf_base() + [
         "-d:",
         "--query",
         f"{full_command} ",
         "--phony",
+        "--header",
+        config_args if config_args else "",
+        "--preview",
+        "[[ -n {1} ]] && rgi-preview {1} {2}",
         "--bind",
         f"start:reload:{reload_cmd}",
         "--bind",
@@ -147,11 +158,9 @@ def build_command_mode_fzf(
         f"tab:execute:{tab_execute}",
         "--bind",
         "enter:execute:open-in-editor {1} {2}",
-        "--header",
-        config_args,
-        "--preview",
-        "[[ -n {1} ]] && rgi-preview {1} {2}",
     ]
+
+    return cmd
 
 
 def build_pattern_mode_fzf(
@@ -172,11 +181,15 @@ def build_pattern_mode_fzf(
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str}"
 
-    return fzf_base() + [
+    cmd = fzf_base() + [
         "-d:",
         "--query",
         f"{quoted_pattern} ",
         "--phony",
+        "--header",
+        f"rg{config_args}{rg_opts} {{q}} {paths_str}",
+        "--preview",
+        "[[ -n {1} ]] && rgi-preview {1} {2}",
         "--bind",
         f"start:reload:{start_reload}",
         "--bind",
@@ -187,11 +200,9 @@ def build_pattern_mode_fzf(
         f"tab:execute:{tab_execute}",
         "--bind",
         "enter:execute:open-in-editor {1} {2}",
-        "--header",
-        f"rg {config_args} {rg_opts} {{q}} {paths_str}",
-        "--preview",
-        "[[ -n {1} ]] && rgi-preview {1} {2}",
     ]
+
+    return cmd
 
 
 if __name__ == "__main__":
