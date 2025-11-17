@@ -21,7 +21,7 @@ def main() -> None:
 
     fzf_cmd = (
         build_command_mode_fzf(
-            pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path, implicit_opts
+            pattern, paths, rg_opts, config_args, delta, ripgrep_config_path, implicit_opts
         )
         if mode == "command"
         else build_pattern_mode_fzf(
@@ -112,7 +112,6 @@ def build_command_mode_fzf(
     paths: list[str],
     rg_opts: str,
     config_args: str,
-    rg: str,
     delta: str,
     ripgrep_config_path: str,
     implicit_opts: str,
