@@ -16,7 +16,7 @@ def main() -> None:
     config_args = parse_ripgrep_config(ripgrep_config_path)
 
     implicit_opts = "--json"
-    rg = f"rg {config_args} {rg_opts} {implicit_opts}".replace("  ", " ")
+    rg = " ".join(f"rg {config_args} {rg_opts} {implicit_opts}".split())
     delta = "delta --grep-output-type classic"
 
     fzf_cmd = (
@@ -118,7 +118,8 @@ def build_command_mode_fzf(
 ) -> list[str]:
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
-    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+    # Normalize spaces and ensure trailing space
+    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split()) + " "
 
     reload_cmd = f"""
         cmd={{q}};
@@ -135,7 +136,7 @@ def build_command_mode_fzf(
     cmd = fzf_base() + [
         "-d:",
         "--query",
-        f"{full_command} ",
+        full_command,
         "--phony",
         "--header",
         config_args if config_args else "",
@@ -174,13 +175,15 @@ def build_pattern_mode_fzf(
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str}"
 
+    header = " ".join(f"rg {config_args} {rg_opts} {{q}} {paths_str}".split())
+
     cmd = fzf_base() + [
         "-d:",
         "--query",
         f"{quoted_pattern} ",
         "--phony",
         "--header",
-        " ".join(f"rg {config_args} {rg_opts} {{q}} {paths_str}".split()),
+        header,
         "--preview",
         "[[ -n {1} ]] && rgi-preview {1} {2}",
         "--bind",
