@@ -96,12 +96,12 @@ jobs:
   test-windows:
     name: Test on Windows with WSL (Optional)
     runs-on: windows-latest
-    continue-on-error: true  # Don't fail the entire workflow if Windows tests fail
+    continue-on-error: true # Don't fail the entire workflow if Windows tests fail
     strategy:
       fail-fast: false
       matrix:
         python-version: ['3.11'] # Test with one Python version for Windows
-    timeout-minutes: 20  # Reduced timeout - if it takes longer, something is wrong
+    timeout-minutes: 20 # Reduced timeout - if it takes longer, something is wrong
 
     steps:
       - name: Checkout code
@@ -124,21 +124,16 @@ jobs:
       # Skip delta installation on Windows - it's not essential for tests
       # and causes hanging issues in CI
 
-      - name: Install uv in WSL
-        shell: wsl-bash {0}
-        timeout-minutes: 5
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo 'source $HOME/.cargo/env' >> ~/.bashrc
-
       - name: Install Python dependencies in WSL
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          source $HOME/.cargo/env
-          uv venv
-          uv pip install -e .
-          uv pip install pytest pytest-timeout pytest-pretty
+          # Use standard Python tools for Windows/WSL - more reliable than uv
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-timeout
 
       - name: Verify installations in WSL
         shell: wsl-bash {0}
@@ -146,26 +141,33 @@ jobs:
         run: |
           echo "=== System info ==="
           uname -a
-          echo "=== Python version ==="
+          echo "=== Python version (system) ==="
           python3 --version
+          echo "=== Python version (venv) ==="
+          source .venv/bin/activate && python --version
           echo "=== tmux version ==="
           tmux -V
           echo "=== ripgrep version ==="
           rg --version
           echo "=== fzf version ==="
           fzf --version
+          echo "=== pytest installed ==="
+          source .venv/bin/activate && python -m pytest --version || echo "pytest not found"
           echo "=== Note: Delta not installed on Windows CI ==="
 
       - name: Run tests in WSL
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          source $HOME/.cargo/env
           export TERM=xterm-256color
           export CI=true
-          # Run a subset of tests for Windows to avoid timeout issues
-          uv run pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60 || true
-          uv run pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60 || true
+          
+          # Activate venv
+          source .venv/bin/activate
+          
+          # Run a subset of tests for Windows
+          python -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60 || true
+          python -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60 || true
 
       - name: Upload test results on failure
         if: failure()

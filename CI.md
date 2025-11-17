@@ -96,3 +96,5 @@ The project uses type annotations checked by `ty`. Run locally:
 ```bash
 uvx ty check
 ```
+
+
