@@ -160,6 +160,9 @@ def build_command_mode_fzf(
         "enter:execute:open-in-editor {1} {2}",
     ]
 
+    if ripgrep_config_path:
+        cmd += ["--bind", f"ctrl-r:execute:{ctrl_r_execute}"]
+
     return cmd
 
 
@@ -181,6 +184,13 @@ def build_pattern_mode_fzf(
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str}"
 
+    # Toggle config off if it's active
+    ctrl_r_execute = (
+        f"RIPGREP_CONFIG_PATH= rgi --rgi-pattern-mode {rg_opts} {{q}} {paths_str}"
+        if ripgrep_config_path
+        else ":"  # no-op if no config
+    )
+
     cmd = fzf_base() + [
         "-d:",
         "--query",
@@ -201,6 +211,9 @@ def build_pattern_mode_fzf(
         "--bind",
         "enter:execute:open-in-editor {1} {2}",
     ]
+
+    if ripgrep_config_path:
+        cmd += ["--bind", f"ctrl-r:execute:{ctrl_r_execute}"]
 
     return cmd
 
