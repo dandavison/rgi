@@ -131,13 +131,13 @@ jobs:
           # Minimal setup for Windows - just copy scripts and install pytest
           echo "Installing pytest with system Python..."
           python3 -m pip install --user pytest pytest-timeout || { echo "Failed to install pytest"; exit 1; }
-          
+
           echo "Making scripts available..."
           mkdir -p ~/.local/bin
           cp src/rgi/scripts/* ~/.local/bin/
           chmod +x ~/.local/bin/rgi*
           export PATH="$HOME/.local/bin:$PATH"
-          
+
           echo "Minimal dependencies installed successfully"
 
       - name: Verify installations in WSL
@@ -168,7 +168,7 @@ jobs:
           export TERM=xterm-256color
           export CI=true
           export PATH="$HOME/.local/bin:$PATH"
-          
+
           # Run a subset of tests for Windows with system Python
           python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60 || true
           python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60 || true

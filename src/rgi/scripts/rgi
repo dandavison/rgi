@@ -11,40 +11,20 @@ from typing import List, Tuple
 
 def main() -> None:
     """Main entry point for rgi."""
-    # Debug logging (disabled for now)
-    # with open("/tmp/rgi-debug.log", "a") as f:
-    #     f.write(f"rgi started with args: {sys.argv}\n")
-
-    # Get absolute path to this script
     SCRIPT_PATH: str = str(Path(__file__).resolve())
-
-    # Get directory containing this script
     SCRIPT_DIR: str = str(Path(SCRIPT_PATH).parent)
-
-    # Add script directory to PATH so rgi-preview can be found
     os.environ["PATH"] = f"{SCRIPT_DIR}:{os.environ.get('PATH', '')}"
 
-    # Parse command line arguments
-    mode: str
-    pattern: str
-    paths: List[str]
-    rg_opts: str
     mode, pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
 
-    # Parse ripgrep config file
     RIPGREP_CONFIG_PATH: str = os.environ.get("RIPGREP_CONFIG_PATH", "")
     config_args: str = parse_ripgrep_config(RIPGREP_CONFIG_PATH)
 
-    # Implicit options that are always applied but never shown
     IMPLICIT_OPTS: str = "--json"
-
-    # Commands
-    # Include config args explicitly (not via RIPGREP_CONFIG_PATH to avoid double application)
     config_part: str = f" {config_args}" if config_args else ""
     RG: str = f"rg{config_part}{rg_opts} {IMPLICIT_OPTS}"
     DELTA: str = "delta --grep-output-type classic"
 
-    # Build fzf command based on mode
     fzf_cmd: List[str]
     if mode == "command":
         fzf_cmd = build_command_mode_fzf(
@@ -78,22 +58,11 @@ def main() -> None:
 
 
 def parse_arguments(argv: List[str]) -> Tuple[str, str, List[str], str]:
-    """Parse command line arguments for rgi.
-
-    Args:
-        argv: Command line arguments (excluding program name)
-
-    Returns:
-        tuple: (mode, pattern, paths, rg_opts)
-            - mode: "command" or "pattern"
-            - pattern: search pattern string
-            - paths: list of paths to search
-            - rg_opts: ripgrep options string
-    """
+    """Parse command line arguments for rgi."""
     pattern: str = ""
     paths: List[str] = []
     rg_opts: str = ""
-    mode: str = "command"  # default mode
+    mode: str = "command"
 
     i: int = 0
     while i < len(argv):
@@ -107,7 +76,6 @@ def parse_arguments(argv: List[str]) -> Tuple[str, str, List[str], str]:
             opt = argv[i]
             rg_opts += f" {opt}"
             i += 1
-            # Handle options that take arguments
             if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"]:
                 if i < len(argv):
                     rg_opts += f" '{argv[i]}'"
@@ -115,7 +83,6 @@ def parse_arguments(argv: List[str]) -> Tuple[str, str, List[str], str]:
         else:
             break
 
-    # Pattern and paths
     if i < len(argv):
         pattern = argv[i]
         i += 1
@@ -127,44 +94,25 @@ def parse_arguments(argv: List[str]) -> Tuple[str, str, List[str], str]:
 
 
 def parse_ripgrep_config(config_path: str) -> str:
-    """Parse ripgrep configuration file.
-
-    Args:
-        config_path: Path to ripgrep config file from RIPGREP_CONFIG_PATH env var
-
-    Returns:
-        str: Space-separated string of config arguments, or empty string
-    """
+    """Parse ripgrep config file and return as command line args string."""
     if not config_path or not os.path.isfile(config_path):
         return ""
 
-    config_args: str = ""
+    config_args = []
     with open(config_path, "r") as f:
         for line in f:
-            # Trim leading/trailing whitespace
             line = line.strip()
-            # Skip comments and empty lines
             if not line or line.startswith("#"):
                 continue
-            # If line doesn't start with -, wrap it in single quotes
-            # (config files don't need quotes, but shell commands do)
             if not line.startswith("-"):
                 line = f"'{line}'"
-            # Add each arg - they need to be properly spaced
-            if config_args:
-                config_args += f" {line}"
-            else:
-                config_args = line
+            config_args.append(line)
 
-    return config_args
+    return " ".join(config_args)
 
 
 def fzf_base() -> List[str]:
-    """Build base fzf options common to all modes.
-
-    Returns:
-        List of fzf base arguments
-    """
+    """Base fzf options common to all modes."""
     return [
         "fzf",
         "--layout",
@@ -187,45 +135,6 @@ def fzf_base() -> List[str]:
     ]
 
 
-def _build_command_mode_reload(
-    config_args: str, implicit_opts: str, delta_cmd: str
-) -> str:
-    """Build the reload command for command mode in a clean, documented way.
-
-    This command handles user input from fzf's query field:
-    1. Captures the query (available as {q})
-    2. If it starts with 'rg', strips that prefix
-    3. Rebuilds the command with proper config and options
-    4. Executes with RIPGREP_CONFIG_PATH cleared to avoid double-application
-    5. Pipes through delta for formatting
-
-    Args:
-        config_args: Config arguments to insert (e.g., " --max-columns=150")
-        implicit_opts: Options always applied but not shown (e.g., "--json")
-        delta_cmd: The delta command for output formatting
-
-    Returns:
-        A single-line bash command suitable for fzf's --bind option
-    """
-    # Build the command components
-    capture_query = "cmd={q}"
-
-    # Process commands starting with 'rg'
-    config_insert = f" {config_args}" if config_args else ""
-    process_rg_prefix = (
-        'if [[ "$cmd" =~ ^rg ]]; then '
-        'cmd="${cmd#rg}"; '  # Remove 'rg' prefix
-        f'cmd="rg{config_insert} {implicit_opts}$cmd"; '  # Rebuild with our options
-        "fi"
-    )
-
-    # Execute with environment control and pipe through delta
-    execute_and_format = f'RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta_cmd}'
-
-    # Combine all parts
-    return f"{capture_query}; {process_rg_prefix}; {execute_and_format}"
-
-
 def build_command_mode_fzf(
     pattern: str,
     paths: List[str],
@@ -236,42 +145,27 @@ def build_command_mode_fzf(
     RIPGREP_CONFIG_PATH: str,
     IMPLICIT_OPTS: str,
 ) -> List[str]:
-    """Build fzf command for command mode.
-
-    Args:
-        pattern: Search pattern
-        paths: List of paths to search
-        rg_opts: Ripgrep options
-        config_args: Arguments from config file
-        RG: Full ripgrep command with config and implicit opts
-        DELTA: Delta command for formatting
-        RIPGREP_CONFIG_PATH: Path to ripgrep config file
-        IMPLICIT_OPTS: Implicit options like --json
-
-    Returns:
-        list: Complete fzf command as list of arguments
-    """
-    # Command mode - show command WITHOUT config args in query (they're shown in header)
-    # This prevents duplication when switching modes
+    """Build fzf command for command mode."""
     paths_str: str = " ".join(paths)
-    # Quote pattern for shell safety (shlex.quote handles spaces and special chars)
     quoted_pattern: str = shlex.quote(pattern) if pattern else ""
     full_command: str = f"rg{rg_opts} {quoted_pattern} {paths_str}"
 
-    # Show effective command including config in header
-    header: str
-    if config_args:
-        header = f"Config applied: {config_args}"
-    else:
-        header = ""
+    header = f"Config applied: {config_args}" if config_args else ""
 
-    # Build the reload command in a clean, documented way
-    reload_cmd: str = _build_command_mode_reload(config_args, IMPLICIT_OPTS, DELTA)
-
-    # Build the tab:execute command for mode switching
-    tab_execute: str = _build_tab_execute(
-        mode="pattern", ripgrep_config_path=RIPGREP_CONFIG_PATH, query="{q}"
+    config_insert = f" {config_args}" if config_args else ""
+    reload_cmd = (
+        f"cmd={{q}}; "
+        f'if [[ "$cmd" =~ ^rg ]]; then '
+        f'cmd="${{cmd#rg}}"; '
+        f'cmd="rg{config_insert} {IMPLICIT_OPTS}$cmd"; '
+        f"fi; "
+        f'RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {DELTA}'
     )
+
+    env_prefix = (
+        f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
+    )
+    tab_execute = f"{env_prefix} rgi-switch-mode pattern {{q}}"
 
     return fzf_base() + [
         "-d:",
@@ -295,58 +189,6 @@ def build_command_mode_fzf(
     ]
 
 
-def _build_pattern_mode_reload(
-    rg_cmd: str, pattern: str, paths: str, delta_cmd: str, is_start: bool = False
-) -> str:
-    """Build the reload command for pattern mode.
-
-    This is simpler than command mode - just run rg with the pattern.
-
-    Args:
-        rg_cmd: The full rg command with options
-        pattern: The search pattern (actual pattern for start, {q} for dynamic)
-        paths: Space-separated list of paths to search
-        delta_cmd: The delta command for output formatting
-        is_start: True for start:reload (uses initial pattern), False for change:reload
-
-    Returns:
-        A single-line bash command suitable for fzf's --bind option
-    """
-    # Clear RIPGREP_CONFIG_PATH to avoid double-application of config
-    # Run rg with pattern and paths, suppress errors, pipe through delta
-    return f"RIPGREP_CONFIG_PATH= {rg_cmd} {pattern} {paths} 2>/dev/null | {delta_cmd}"
-
-
-def _build_tab_execute(
-    mode: str, ripgrep_config_path: str, query: str = "{q}", **kwargs
-) -> str:
-    """Build the tab:execute command for mode switching.
-
-    Args:
-        mode: Target mode ('pattern' or 'command')
-        ripgrep_config_path: Path to ripgrep config file (if any)
-        query: The current query (usually {q})
-        **kwargs: Additional arguments depending on mode
-            - For 'command' mode: rg_opts, paths_str
-
-    Returns:
-        A command string for the tab:execute binding
-    """
-    # Set environment variable if we have a config path
-    env_prefix = (
-        f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
-    )
-
-    if mode == "pattern":
-        # Switching to pattern mode (from command mode)
-        return f"{env_prefix} rgi-switch-mode pattern {query}"
-    else:
-        # Switching to command mode (from pattern mode)
-        rg_opts = kwargs.get("rg_opts", "")
-        paths_str = kwargs.get("paths_str", "")
-        return f"{env_prefix} rgi-switch-mode command {query} {rg_opts} {paths_str} "
-
-
 def build_pattern_mode_fzf(
     pattern: str,
     paths: List[str],
@@ -356,56 +198,26 @@ def build_pattern_mode_fzf(
     DELTA: str,
     RIPGREP_CONFIG_PATH: str,
 ) -> List[str]:
-    """Build fzf command for pattern mode.
-
-    Args:
-        pattern: Search pattern
-        paths: List of paths to search
-        rg_opts: Ripgrep options
-        config_args: Arguments from config file
-        RG: Full ripgrep command with config and implicit opts
-        DELTA: Delta command for formatting
-        RIPGREP_CONFIG_PATH: Path to ripgrep config file
-
-    Returns:
-        list: Complete fzf command as list of arguments
-    """
-    # Pattern mode - the query is just the search pattern
+    """Build fzf command for pattern mode."""
     paths_str: str = " ".join(paths)
+    quoted_pattern: str = shlex.quote(pattern) if pattern else ""
 
-    # Quote pattern for display in fzf query (shlex.quote handles spaces and special chars)
-    query_pattern: str = shlex.quote(pattern) if pattern else ""
-
-    # Build the bind commands in a clean, documented way
-    # For start:reload, use the initial pattern (properly quoted for shell safety)
-    start_reload: str = _build_pattern_mode_reload(
-        rg_cmd=RG,
-        pattern=shlex.quote(pattern) if pattern else "",
-        paths=paths_str,
-        delta_cmd=DELTA,
-        is_start=True,
+    start_reload = (
+        f"RIPGREP_CONFIG_PATH= {RG} {quoted_pattern} {paths_str} 2>/dev/null | {DELTA}"
     )
+    change_reload = f"RIPGREP_CONFIG_PATH= {RG} {{q}} {paths_str} 2>/dev/null | {DELTA}"
 
-    # For change:reload, use the dynamic query from fzf
-    change_reload: str = _build_pattern_mode_reload(
-        rg_cmd=RG, pattern="{q}", paths=paths_str, delta_cmd=DELTA, is_start=False
+    env_prefix = (
+        f'RIPGREP_CONFIG_PATH="{RIPGREP_CONFIG_PATH}"' if RIPGREP_CONFIG_PATH else ""
     )
-
-    # Build the tab:execute command for mode switching
-    tab_execute: str = _build_tab_execute(
-        mode="command",
-        ripgrep_config_path=RIPGREP_CONFIG_PATH,
-        query="{q}",
-        rg_opts=rg_opts,
-        paths_str=paths_str,
-    )
+    tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str} "
 
     header: str = f"rg{config_args if config_args else ''}{rg_opts} {{q}} {paths_str}"
 
     return fzf_base() + [
         "-d:",
         "--query",
-        f"{query_pattern} ",
+        f"{quoted_pattern} ",
         "--phony",
         "--bind",
         f"start:reload:{start_reload}",
