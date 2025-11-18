@@ -76,7 +76,7 @@ def parse_ripgrep_config(config_path: str) -> str:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
-                    continue
+                continue
             if not line.startswith("-"):
                 line = f"'{line}'"
             config_args += f" {line}"
@@ -145,8 +145,6 @@ def build_command_mode_fzf(
         "--bind",
         f"start:reload:{reload_cmd}",
         "--bind",
-        "start:backward-delete-char",
-        "--bind",
         f"change:reload:{reload_cmd}",
         "--bind",
         f"tab:execute:{tab_execute}",
@@ -180,7 +178,7 @@ def build_pattern_mode_fzf(
     cmd = fzf_base() + [
         "-d:",
         "--query",
-        f"{pattern} " if pattern else " ",
+        f"{pattern} " if pattern else "",
         "--phony",
         "--header",
         header,
@@ -188,8 +186,6 @@ def build_pattern_mode_fzf(
         "[[ -n {1} ]] && rgi-preview {1} {2}",
         "--bind",
         f"start:reload:{start_reload}",
-        "--bind",
-        "start:backward-delete-char",
         "--bind",
         f"change:reload:{change_reload}",
         "--bind",
