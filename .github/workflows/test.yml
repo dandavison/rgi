@@ -27,18 +27,37 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y tmux fzf
-          # Install ripgrep
+          sudo apt-get install -y tmux
+          
+          # Install ripgrep (rg)
+          echo "Installing ripgrep..."
           curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep_14.1.0-1_amd64.deb
           sudo dpkg -i ripgrep_14.1.0-1_amd64.deb
+          rm ripgrep_14.1.0-1_amd64.deb
+          
+          # Install bat
+          echo "Installing bat..."
+          curl -LO https://github.com/sharkdp/bat/releases/download/v0.24.0/bat_0.24.0_amd64.deb
+          sudo dpkg -i bat_0.24.0_amd64.deb
+          rm bat_0.24.0_amd64.deb
+          
           # Install delta
+          echo "Installing delta..."
           curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_amd64.deb
           sudo dpkg -i git-delta_0.18.2_amd64.deb
+          rm git-delta_0.18.2_amd64.deb
+          
+          # Install fzf (latest version for better compatibility)
+          echo "Installing fzf..."
+          curl -LO https://github.com/junegunn/fzf/releases/download/v0.55.0/fzf-0.55.0-linux_amd64.tar.gz
+          tar xzf fzf-0.55.0-linux_amd64.tar.gz
+          sudo mv fzf /usr/local/bin/
+          rm fzf-0.55.0-linux_amd64.tar.gz
 
       - name: Install system dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install tmux ripgrep fzf git-delta
+          brew install tmux ripgrep bat fzf git-delta
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -64,12 +83,16 @@ jobs:
           python --version
           echo "=== tmux version ==="
           tmux -V
-          echo "=== ripgrep version ==="
+          echo "=== ripgrep (rg) version ==="
           rg --version
-          echo "=== fzf version ==="
-          fzf --version
+          echo "=== bat version ==="
+          bat --version
           echo "=== delta version ==="
           delta --version
+          echo "=== fzf version ==="
+          fzf --version
+          echo "=== uv version ==="
+          uv --version
 
       - name: Run tests
         run: |
@@ -120,6 +143,23 @@ jobs:
             curl
             git
             wget
+
+      - name: Install bat in WSL
+        shell: wsl-bash {0}
+        timeout-minutes: 5
+        run: |
+          # Install bat binary directly without sudo
+          echo "Installing bat..."
+          mkdir -p $HOME/.local/bin
+          cd /tmp
+          curl -LO https://github.com/sharkdp/bat/releases/download/v0.24.0/bat-v0.24.0-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf bat-v0.24.0-x86_64-unknown-linux-gnu.tar.gz --no-same-owner 2>/dev/null || true
+          mv bat-v0.24.0-x86_64-unknown-linux-gnu/bat $HOME/.local/bin/
+          rm -rf bat-v0.24.0-x86_64-unknown-linux-gnu bat-v0.24.0-x86_64-unknown-linux-gnu.tar.gz
+          cd -
+          export PATH="$HOME/.local/bin:$PATH"
+          bat --version
+          echo "Bat installed successfully"
 
       - name: Install delta in WSL
         shell: wsl-bash {0}
@@ -195,16 +235,18 @@ jobs:
           uname -a
           echo "=== Python version ==="
           python3 --version
-          echo "=== uv version ==="
-          uv --version
           echo "=== tmux version ==="
           tmux -V
-          echo "=== ripgrep version ==="
+          echo "=== ripgrep (rg) version ==="
           rg --version
-          echo "=== fzf version ==="
-          fzf --version
+          echo "=== bat version ==="
+          bat --version
           echo "=== delta version ==="
           delta --version
+          echo "=== fzf version ==="
+          fzf --version
+          echo "=== uv version ==="
+          uv --version
           echo "=== pytest installed ==="
           python3 -m pytest --version || echo "pytest not found"
           echo "=== rgi installed ==="
@@ -215,7 +257,7 @@ jobs:
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          # Set up PATH for uv, delta, and tools
+          # Set up PATH for all tools (uv, bat, delta, fzf, rgi)
           export PATH="$HOME/.local/bin:$PATH"
 
           export TERM=xterm-256color
