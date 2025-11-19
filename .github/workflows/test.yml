@@ -124,30 +124,36 @@ jobs:
       # Skip delta installation on Windows - it's not essential for tests
       # and causes hanging issues in CI
 
-      - name: Install minimal test dependencies in WSL
+      - name: Install Python and project in WSL
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          # Minimal setup for Windows - just copy scripts and install pytest
-          echo "Installing pytest with system Python..."
-          python3 -m pip install --user pytest pytest-timeout || { echo "Failed to install pytest"; exit 1; }
-
-          echo "Making scripts available..."
-          mkdir -p ~/.local/bin
-          cp src/rgi/scripts/* ~/.local/bin/
-          chmod +x ~/.local/bin/rgi*
-          export PATH="$HOME/.local/bin:$PATH"
-
-          echo "Minimal dependencies installed successfully"
+          # Create virtual environment and install project
+          echo "Creating virtual environment..."
+          python3 -m venv venv
+          source venv/bin/activate
+          
+          # Upgrade pip and install the project
+          echo "Installing project..."
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e .
+          python3 -m pip install pytest pytest-timeout
+          
+          # Make scripts executable (in case git didn't preserve permissions)
+          chmod +x src/rgi/scripts/*
+          
+          echo "Dependencies installed successfully"
 
       - name: Verify installations in WSL
         shell: wsl-bash {0}
         timeout-minutes: 2
         run: |
+          source venv/bin/activate
+          
           echo "=== System info ==="
           uname -a
           echo "=== Python version ==="
-          python3 --version
+          python --version
           echo "=== tmux version ==="
           tmux -V
           echo "=== ripgrep version ==="
@@ -155,23 +161,23 @@ jobs:
           echo "=== fzf version ==="
           fzf --version
           echo "=== pytest installed ==="
-          python3 -m pytest --version || echo "pytest not found"
+          python -m pytest --version
           echo "=== rgi script available ==="
-          export PATH="$HOME/.local/bin:$PATH"
-          which rgi || echo "rgi not found"
+          which rgi
           echo "=== Note: Delta not installed on Windows CI ==="
 
       - name: Run tests in WSL
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
+          source venv/bin/activate
+          
           export TERM=xterm-256color
           export CI=true
-          export PATH="$HOME/.local/bin:$PATH"
 
-          # Run a subset of tests for Windows with system Python
-          python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60
-          python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60
+          # Run a subset of tests for Windows 
+          python -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60
+          python -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60
 
       - name: Upload test results on failure
         if: failure()
