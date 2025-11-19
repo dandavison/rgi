@@ -8,90 +8,89 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Temporarily disabled to focus on WSL tests
-  # test:
-  #   name: Test on ${{ matrix.os }} - Python ${{ matrix.python-version }}
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: [ubuntu-latest, macos-latest]
-  #       python-version: ['3.9', '3.10', '3.11', '3.12']
-  #       # Windows tests are more complex due to tmux requirements
-  #       # We'll handle Windows separately if needed
-  #
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #
-  #     - name: Install system dependencies (Ubuntu)
-  #       if: matrix.os == 'ubuntu-latest'
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y tmux fzf
-  #         # Install ripgrep
-  #         curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep_14.1.0-1_amd64.deb
-  #         sudo dpkg -i ripgrep_14.1.0-1_amd64.deb
-  #         # Install delta
-  #         curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_amd64.deb
-  #         sudo dpkg -i git-delta_0.18.2_amd64.deb
-  #
-  #     - name: Install system dependencies (macOS)
-  #       if: matrix.os == 'macos-latest'
-  #       run: |
-  #         brew install tmux ripgrep fzf git-delta
-  #
-  #     - name: Set up Python ${{ matrix.python-version }}
-  #       uses: actions/setup-python@v5
-  #       with:
-  #         python-version: ${{ matrix.python-version }}
-  #
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@v3
-  #       with:
-  #         enable-cache: true
-  #
-  #     - name: Install Python dependencies
-  #       run: |
-  #         uv venv
-  #         uv pip install -e .
-  #         uv pip install pytest pytest-timeout pytest-pretty
-  #
-  #     - name: Verify installations
-  #       run: |
-  #         echo "=== System info ==="
-  #         uname -a
-  #         echo "=== Python version ==="
-  #         python --version
-  #         echo "=== tmux version ==="
-  #         tmux -V
-  #         echo "=== ripgrep version ==="
-  #         rg --version
-  #         echo "=== fzf version ==="
-  #         fzf --version
-  #         echo "=== delta version ==="
-  #         delta --version
-  #
-  #     - name: Run tests
-  #       run: |
-  #         uv run pytest tests/test_rgi.py -v --tb=short --timeout=60
-  #       env:
-  #         TERM: xterm-256color
-  #         CI: true
-  #
-  #     - name: Run type checking with ty
-  #       run: |
-  #         uvx ty check
-  #       continue-on-error: true # Don't fail the build on type errors for now
-  #
-  #     - name: Upload test results on failure
-  #       if: failure()
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: test-failure-${{ matrix.os }}-py${{ matrix.python-version }}
-  #         path: |
-  #           tests/test-fixture-*
-  #         retention-days: 7
+  test:
+    name: Test on ${{ matrix.os }} - Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+        # Windows tests are more complex due to tmux requirements
+        # We'll handle Windows separately if needed
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux fzf
+          # Install ripgrep
+          curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep_14.1.0-1_amd64.deb
+          sudo dpkg -i ripgrep_14.1.0-1_amd64.deb
+          # Install delta
+          curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_amd64.deb
+          sudo dpkg -i git-delta_0.18.2_amd64.deb
+
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install tmux ripgrep fzf git-delta
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: |
+          uv venv
+          uv pip install -e .
+          uv pip install pytest pytest-timeout pytest-pretty
+
+      - name: Verify installations
+        run: |
+          echo "=== System info ==="
+          uname -a
+          echo "=== Python version ==="
+          python --version
+          echo "=== tmux version ==="
+          tmux -V
+          echo "=== ripgrep version ==="
+          rg --version
+          echo "=== fzf version ==="
+          fzf --version
+          echo "=== delta version ==="
+          delta --version
+
+      - name: Run tests
+        run: |
+          uv run pytest tests/test_rgi.py -v --tb=short --timeout=60
+        env:
+          TERM: xterm-256color
+          CI: true
+
+      - name: Run type checking with ty
+        run: |
+          uvx ty check
+        continue-on-error: true # Don't fail the build on type errors for now
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failure-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            tests/test-fixture-*
+          retention-days: 7
 
   # Separate job for Windows testing with WSL
   test-windows:
