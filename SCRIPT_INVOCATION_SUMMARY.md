@@ -52,3 +52,4 @@ The GitHub Actions workflow has been updated to run these tests on all platforms
 - **Windows WSL** (Python 3.11)
 
 All tests verify that scripts can be invoked as they would be in real usage after installation.
+

@@ -28,25 +28,25 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y tmux
-          
+
           # Install ripgrep (rg)
           echo "Installing ripgrep..."
           curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep_14.1.0-1_amd64.deb
           sudo dpkg -i ripgrep_14.1.0-1_amd64.deb
           rm ripgrep_14.1.0-1_amd64.deb
-          
+
           # Install bat
           echo "Installing bat..."
           curl -LO https://github.com/sharkdp/bat/releases/download/v0.24.0/bat_0.24.0_amd64.deb
           sudo dpkg -i bat_0.24.0_amd64.deb
           rm bat_0.24.0_amd64.deb
-          
+
           # Install delta
           echo "Installing delta..."
           curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_amd64.deb
           sudo dpkg -i git-delta_0.18.2_amd64.deb
           rm git-delta_0.18.2_amd64.deb
-          
+
           # Install fzf (latest version for better compatibility)
           echo "Installing fzf..."
           curl -LO https://github.com/junegunn/fzf/releases/download/v0.55.0/fzf-0.55.0-linux_amd64.tar.gz

@@ -117,7 +117,7 @@ sudo apt install tmux
 
 ### fzf key bindings not working
 
-Make sure you have fzf v0.55.0 or later (check with `fzf --version`). 
+Make sure you have fzf v0.55.0 or later (check with `fzf --version`).
 The version in Ubuntu repos may be too old.
 
 ## What's Tested and Working
