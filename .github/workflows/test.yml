@@ -150,9 +150,17 @@ jobs:
           # Add uv to PATH
           export PATH="$HOME/.local/bin:$PATH"
 
+          # Copy project to WSL filesystem to avoid permission issues
+          echo "Copying project to WSL filesystem..."
+          cp -r . /tmp/rgi-install
+          cd /tmp/rgi-install
+
           # Install rgi using uv tool install as per README
           echo "Installing rgi with uv tool install..."
           uv tool install .
+
+          # Go back to original directory
+          cd -
 
           # Install pytest for testing
           echo "Installing pytest for tests..."
