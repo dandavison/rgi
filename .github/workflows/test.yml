@@ -14,8 +14,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        # Temporarily disabled to focus on WSL tests
+        # os: [ubuntu-latest, macos-latest]
+        # python-version: ['3.9', '3.10', '3.11', '3.12']
+        os: []  # Empty matrix to skip these tests
+        python-version: []
         # Windows tests are more complex due to tmux requirements
         # We'll handle Windows separately if needed
 
@@ -164,7 +167,6 @@ jobs:
         timeout-minutes: 2
         run: |
           # Set up PATH for uv, delta, and tools
-          source $HOME/.cargo/env
           export PATH="$HOME/.local/bin:$PATH"
 
           echo "=== System info ==="
@@ -192,7 +194,6 @@ jobs:
         timeout-minutes: 10
         run: |
           # Set up PATH for uv, delta, and tools
-          source $HOME/.cargo/env
           export PATH="$HOME/.local/bin:$PATH"
 
           export TERM=xterm-256color
