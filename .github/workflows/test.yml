@@ -107,6 +107,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Fix Windows line endings
+        shell: wsl-bash {0}
+        run: |
+          # Convert all shell scripts and Python files to Unix line endings
+          echo "Converting line endings to Unix format..."
+          find . -type f \( -name "*.sh" -o -name "*.py" -o -name "rgi" -o -name "rgi-*" -o -name "test-interactive" \) -exec dos2unix {} \; 2>/dev/null || \
+          find . -type f \( -name "*.sh" -o -name "*.py" -o -name "rgi" -o -name "rgi-*" -o -name "test-interactive" \) -exec sed -i 's/\r$//' {} \;
+          echo "Line endings converted"
 
       - name: Setup WSL
         uses: Vampire/setup-wsl@v3
@@ -204,10 +213,6 @@ jobs:
 
           export TERM=xterm-256color
           export CI=true
-
-          # Fix Windows line endings in test scripts
-          echo "Converting line endings in test scripts..."
-          find tests -type f -name "*.sh" -exec dos2unix {} \; 2>/dev/null || find tests -type f -name "*.sh" -exec sed -i 's/\r$//' {} \;
 
           # Run tests against the uv-installed rgi
           python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60
