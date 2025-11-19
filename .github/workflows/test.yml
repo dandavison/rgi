@@ -125,11 +125,14 @@ jobs:
         shell: wsl-bash {0}
         timeout-minutes: 5
         run: |
-          # Install delta
+          # Install delta binary directly without sudo
           echo "Installing delta..."
-          curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_amd64.deb
-          sudo dpkg -i git-delta_0.18.2_amd64.deb
-          rm git-delta_0.18.2_amd64.deb
+          curl -L https://github.com/dandavison/delta/releases/download/0.18.2/delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          mkdir -p $HOME/.local/bin
+          mv delta-0.18.2-x86_64-unknown-linux-gnu/delta $HOME/.local/bin/
+          rm -rf delta-0.18.2-x86_64-unknown-linux-gnu
+          export PATH="$HOME/.local/bin:$PATH"
+          delta --version
           echo "Delta installed successfully"
 
       - name: Install rgi as a user would (following README)
@@ -158,7 +161,7 @@ jobs:
         shell: wsl-bash {0}
         timeout-minutes: 2
         run: |
-          # Set up PATH for uv and tools
+          # Set up PATH for uv, delta, and tools
           source $HOME/.cargo/env
           export PATH="$HOME/.local/bin:$PATH"
 
@@ -186,7 +189,7 @@ jobs:
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          # Set up PATH for uv and tools
+          # Set up PATH for uv, delta, and tools
           source $HOME/.cargo/env
           export PATH="$HOME/.local/bin:$PATH"
 
