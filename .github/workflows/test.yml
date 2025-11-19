@@ -115,12 +115,12 @@ jobs:
           wsl-shell-user: runner
           additional-packages: |
             tmux
-            fzf
             ripgrep
             python3-pip
             python3-venv
             curl
             git
+            wget
 
       - name: Install delta in WSL
         shell: wsl-bash {0}
@@ -138,6 +138,23 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           delta --version
           echo "Delta installed successfully"
+
+      - name: Install newer fzf in WSL
+        shell: wsl-bash {0}
+        timeout-minutes: 5
+        run: |
+          # Install newer fzf binary to support start: binding
+          echo "Installing newer fzf..."
+          cd /tmp
+          wget -q https://github.com/junegunn/fzf/releases/download/v0.55.0/fzf-0.55.0-linux_amd64.tar.gz
+          tar xzf fzf-0.55.0-linux_amd64.tar.gz
+          mkdir -p $HOME/.local/bin
+          mv fzf $HOME/.local/bin/
+          rm -f fzf-0.55.0-linux_amd64.tar.gz
+          cd -
+          export PATH="$HOME/.local/bin:$PATH"
+          fzf --version
+          echo "fzf installed successfully"
 
       - name: Install rgi as a user would (following README)
         shell: wsl-bash {0}
@@ -205,11 +222,16 @@ jobs:
           export TERM=xterm-256color
           export CI=true
 
+          # Debug: Check versions
+          echo "=== Checking tool versions ==="
+          echo "fzf version: $(fzf --version)"
+          echo "tmux version: $(tmux -V)"
+          
           # Debug: Test tmux and rgi directly
           echo "=== Testing tmux functionality ==="
-          tmux -V
+          export TMUX=""  # Ensure we're not in a tmux session already
           tmux new-session -d -s test-session "echo 'Hello from tmux'"
-          sleep 0.5
+          sleep 1
           tmux capture-pane -t test-session -p || echo "Failed to capture tmux pane"
           tmux kill-session -t test-session 2>/dev/null || true
           
@@ -219,14 +241,15 @@ jobs:
           cd test-rgi-direct
           echo "TODO: Test this" > test.txt
           echo "=== Running: rgi TODO . ==="
-          timeout 5 rgi TODO . || echo "rgi command failed or timed out with exit code: $?"
+          timeout 5 rgi TODO . 2>&1 || echo "rgi command failed or timed out with exit code: $?"
           echo "=== Running: rg TODO . ==="
           rg TODO . || echo "rg command failed with exit code: $?"
           
           echo "=== Testing fzf ==="
           echo -e "line1\nline2\nline3" | fzf --filter="line2" || echo "fzf failed with exit code: $?"
           
-          cd -
+          # Go back to project directory for tests
+          cd /mnt/d/a/rgi/rgi
 
           # Run tests against the uv-installed rgi
           python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60
