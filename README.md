@@ -2,7 +2,7 @@ An interactive UI for ripgrep.
 
 ## Installation
 
-Install [uv](https://docs.astral.sh/ty/installation/), [ripgrep](https://github.com/BurntSushi/ripgrep), [fzf](https://github.com/junegunn/fzf), [bat](https://github.com/sharkdp/bat), [delta](https://dandavison.github.io/delta/installation.html).
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), [ripgrep](https://github.com/BurntSushi/ripgrep), [fzf](https://github.com/junegunn/fzf), [bat](https://github.com/sharkdp/bat), [delta](https://dandavison.github.io/delta/installation.html).
 
 E.g. on MacOS `brew install uv ripgrep fzf bat git-delta`.
 
