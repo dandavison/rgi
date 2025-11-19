@@ -170,8 +170,8 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
 
           # Run a subset of tests for Windows with system Python
-          python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60 || true
-          python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60 || true
+          python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60
+          python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60
 
       - name: Upload test results on failure
         if: failure()
