@@ -205,6 +205,29 @@ jobs:
           export TERM=xterm-256color
           export CI=true
 
+          # Debug: Test tmux and rgi directly
+          echo "=== Testing tmux functionality ==="
+          tmux -V
+          tmux new-session -d -s test-session "echo 'Hello from tmux'"
+          sleep 0.5
+          tmux capture-pane -t test-session -p || echo "Failed to capture tmux pane"
+          tmux kill-session -t test-session 2>/dev/null || true
+          
+          echo "=== Testing rgi directly ==="
+          cd /tmp
+          mkdir -p test-rgi-direct
+          cd test-rgi-direct
+          echo "TODO: Test this" > test.txt
+          echo "=== Running: rgi TODO . ==="
+          timeout 5 rgi TODO . || echo "rgi command failed or timed out with exit code: $?"
+          echo "=== Running: rg TODO . ==="
+          rg TODO . || echo "rg command failed with exit code: $?"
+          
+          echo "=== Testing fzf ==="
+          echo -e "line1\nline2\nline3" | fzf --filter="line2" || echo "fzf failed with exit code: $?"
+          
+          cd -
+
           # Run tests against the uv-installed rgi
           python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60
           python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60
