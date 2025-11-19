@@ -222,46 +222,8 @@ jobs:
           export TERM=xterm-256color
           export CI=true
 
-          # Debug: Check versions
-          echo "=== Checking tool versions ==="
-          echo "fzf version: $(fzf --version)"
-          echo "tmux version: $(tmux -V)"
-          
-          # Debug: Test tmux and rgi directly
-          echo "=== Testing tmux functionality ==="
-          export TMUX=""  # Ensure we're not in a tmux session already
-          
-          # Test basic tmux functionality
-          tmux new-session -d -s test-basic "echo 'Hello from tmux'; sleep 1"
-          sleep 2
-          echo "Capturing tmux output:"
-          tmux capture-pane -t test-basic -p || echo "Failed to capture tmux pane"
-          tmux kill-session -t test-basic 2>/dev/null || true
-          
-          echo "=== Testing rgi directly ==="
-          cd /tmp
-          mkdir -p test-rgi-direct
-          cd test-rgi-direct
-          echo "TODO: Test this" > test.txt
-          
-          # Test basic rg functionality
-          echo "=== Running: rg TODO . ==="
-          rg TODO . || echo "rg command failed with exit code: $?"
-          
-          # Test fzf non-interactively
-          echo "=== Testing fzf non-interactively ==="
-          echo -e "line1\nline2\nline3" | fzf --filter="line2" || echo "fzf failed with exit code: $?"
-          
-          # Test rgi in non-interactive mode with input
-          echo "=== Testing rgi with piped input ==="
-          echo "" | timeout 2 rgi TODO . 2>&1 || echo "rgi failed with exit code: $?"
-          
-          # Go back to project directory for tests
-          cd /mnt/d/a/rgi/rgi
-
-          # Run tests against the uv-installed rgi
-          python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60
-          python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60
+          # Run all tests against the uv-installed rgi
+          python3 -m pytest tests/test_rgi.py -v --tb=short --timeout=60
 
       - name: Upload test results on failure
         if: failure()
