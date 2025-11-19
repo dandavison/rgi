@@ -73,7 +73,7 @@ jobs:
 
       - name: Run tests
         run: |
-          uv run pytest tests/test_rgi.py -v --tb=short --timeout=60
+          uv run pytest tests/ -v --tb=short --timeout=60
         env:
           TERM: xterm-256color
           CI: true
@@ -222,7 +222,7 @@ jobs:
           export CI=true
 
           # Run all tests against the uv-installed rgi
-          python3 -m pytest tests/test_rgi.py -v --tb=short --timeout=60
+          python3 -m pytest tests/ -v --tb=short --timeout=60
 
       - name: Upload test results on failure
         if: failure()
