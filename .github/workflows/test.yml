@@ -32,8 +32,8 @@ jobs:
           curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep_14.1.0-1_amd64.deb
           sudo dpkg -i ripgrep_14.1.0-1_amd64.deb
           # Install delta
-          curl -LO https://github.com/dandavison/delta/releases/download/0.17.0/git-delta_0.17.0_amd64.deb
-          sudo dpkg -i git-delta_0.17.0_amd64.deb
+          curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_amd64.deb
+          sudo dpkg -i git-delta_0.18.2_amd64.deb
 
       - name: Install system dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -127,9 +127,9 @@ jobs:
         run: |
           # Install delta
           echo "Installing delta..."
-          curl -LO https://github.com/dandavison/delta/releases/download/0.17.0/git-delta_0.17.0_amd64.deb
-          sudo dpkg -i git-delta_0.17.0_amd64.deb
-          rm git-delta_0.17.0_amd64.deb
+          curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_amd64.deb
+          sudo dpkg -i git-delta_0.18.2_amd64.deb
+          rm git-delta_0.18.2_amd64.deb
           echo "Delta installed successfully"
 
       - name: Install rgi as a user would (following README)
