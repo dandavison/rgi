@@ -145,14 +145,13 @@ jobs:
           # Install uv as recommended in README
           echo "Installing uv..."
           curl -LsSf https://astral.sh/uv/install.sh | sh
-          source $HOME/.cargo/env
+          
+          # Add uv to PATH
+          export PATH="$HOME/.local/bin:$PATH"
 
           # Install rgi using uv tool install as per README
           echo "Installing rgi with uv tool install..."
           uv tool install .
-
-          # Ensure rgi is in PATH
-          export PATH="$HOME/.local/bin:$PATH"
 
           # Install pytest for testing
           echo "Installing pytest for tests..."
