@@ -1,0 +1,29 @@
+# Ensure all text files use LF line endings (Unix style)
+* text=auto eol=lf
+
+# Shell scripts MUST have LF endings
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Python files should have LF endings
+*.py text eol=lf
+
+# Test scripts and other executables
+test-interactive text eol=lf
+rgi text eol=lf
+rgi-* text eol=lf
+
+# Windows-specific files can keep CRLF if needed
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files (don't modify)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.whl binary
+*.tar binary
+*.gz binary
+*.zip binary
