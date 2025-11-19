@@ -205,6 +205,10 @@ jobs:
           export TERM=xterm-256color
           export CI=true
 
+          # Fix Windows line endings in test scripts
+          echo "Converting line endings in test scripts..."
+          find tests -type f -name "*.sh" -exec dos2unix {} \; 2>/dev/null || find tests -type f -name "*.sh" -exec sed -i 's/\r$//' {} \;
+
           # Run tests against the uv-installed rgi
           python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60
           python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60
