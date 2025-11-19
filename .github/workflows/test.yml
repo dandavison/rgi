@@ -121,8 +121,16 @@ jobs:
             curl
             git
 
-      # Skip delta installation on Windows - it's not essential for tests
-      # and causes hanging issues in CI
+      - name: Install delta in WSL
+        shell: wsl-bash {0}
+        timeout-minutes: 5
+        run: |
+          # Install delta
+          echo "Installing delta..."
+          curl -LO https://github.com/dandavison/delta/releases/download/0.17.0/git-delta_0.17.0_amd64.deb
+          sudo dpkg -i git-delta_0.17.0_amd64.deb
+          rm git-delta_0.17.0_amd64.deb
+          echo "Delta installed successfully"
 
       - name: Install rgi as a user would (following README)
         shell: wsl-bash {0}
@@ -166,12 +174,13 @@ jobs:
           rg --version
           echo "=== fzf version ==="
           fzf --version
+          echo "=== delta version ==="
+          delta --version
           echo "=== pytest installed ==="
           python3 -m pytest --version || echo "pytest not found"
           echo "=== rgi installed ==="
           which rgi
           rgi --help || true  # Test that rgi can be invoked
-          echo "=== Note: Delta not installed on Windows CI ==="
 
       - name: Run tests in WSL
         shell: wsl-bash {0}
@@ -180,7 +189,7 @@ jobs:
           # Set up PATH for uv and tools
           source $HOME/.cargo/env
           export PATH="$HOME/.local/bin:$PATH"
-          
+
           export TERM=xterm-256color
           export CI=true
 
