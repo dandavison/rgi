@@ -127,10 +127,13 @@ jobs:
         run: |
           # Install delta binary directly without sudo
           echo "Installing delta..."
-          curl -L https://github.com/dandavison/delta/releases/download/0.18.2/delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz | tar xz
           mkdir -p $HOME/.local/bin
+          cd /tmp
+          curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz --no-same-owner 2>/dev/null || true
           mv delta-0.18.2-x86_64-unknown-linux-gnu/delta $HOME/.local/bin/
-          rm -rf delta-0.18.2-x86_64-unknown-linux-gnu
+          rm -rf delta-0.18.2-x86_64-unknown-linux-gnu delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz
+          cd -
           export PATH="$HOME/.local/bin:$PATH"
           delta --version
           echo "Delta installed successfully"
