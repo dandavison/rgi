@@ -16,6 +16,12 @@ if [[ ! "$file" = /* ]]; then
     fi
 fi
 
+# If RGI_EDITOR is an absolute path to an executable, use it directly
+# The executable should accept two arguments: file path and line number
+if [[ "$editor" = /* ]] && [[ -x "$editor" ]]; then
+    "$editor" "$file" "$line"
+fi
+
 case "$editor" in
     emacs|emacsclient)
         # Emacs using emacsclient
@@ -78,7 +84,8 @@ case "$editor" in
             "$editor" "+$line" "$file"
         else
             echo "Error: Unknown editor '$editor'. Set RGI_EDITOR or EDITOR to one of:" >&2
-            echo "emacs, idea, pycharm, vscode, cursor, helix, zed, wormhole, vim" >&2
+            echo "  emacs, idea, pycharm, vscode, cursor, helix, zed, wormhole, vim" >&2
+            echo "  or an absolute path to an executable that accepts <file> <line> arguments" >&2
             exit 1
         fi
         ;;

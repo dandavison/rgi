@@ -8,7 +8,7 @@ Then:
 
 ```
 uv tool install git+https://github.com/dandavison/rgi
-export RGI_EDITOR=vscode  # vscode | cursor | idea | zed | vim  | emacs | pycharm | helix | wormhole
+export RGI_EDITOR=vscode  # vscode | cursor | idea | zed | vim | emacs | pycharm | helix | wormhole | /path/to/custom-editor
 ```
 
 <br>
@@ -51,3 +51,17 @@ See `rg --help` or an [rg manpage](https://manpages.ubuntu.com/manpages/jammy/ma
 Use the `FZF_DEFAULT_OPTS` environment variable to set `fzf` options.
 Please open an issue if `rgi` is setting `fzf` options that you wish to control yourself.
 See the environment variables section of `fzf --man`.
+
+<br>
+
+**Editor configuration**
+
+Set `RGI_EDITOR` to one of the values with built-in support (`vscode`, `cursor`, `idea`, `zed`, `vim`, `emacs`, `pycharm`, `helix`, `wormhole`).
+
+Alternatively you may set it to an absolute file path to a custom executable:
+
+```bash
+export RGI_EDITOR=/path/to/my-custom-editor
+```
+
+The executable must accept two arguments: an absolute file path, and a line number.
