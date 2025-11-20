@@ -10,7 +10,7 @@ Then:
 
 ```
 uv tool install git+https://github.com/dandavison/rgi
-export RGI_EDITOR=vscode  # vscode | cursor | idea
+export RGI_EDITOR=vscode  # vscode | cursor | idea | vim
 ```
 
 **Update to latest version**
