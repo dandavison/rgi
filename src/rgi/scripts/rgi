@@ -30,7 +30,7 @@ def main() -> None:
     )
 
     fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
-    sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True))
+    sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True, executable="/bin/bash"))
 
 
 def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:

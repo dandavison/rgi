@@ -27,18 +27,37 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y tmux fzf
-          # Install ripgrep
+          sudo apt-get install -y tmux
+
+          # Install ripgrep (rg)
+          echo "Installing ripgrep..."
           curl -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep_14.1.0-1_amd64.deb
           sudo dpkg -i ripgrep_14.1.0-1_amd64.deb
+          rm ripgrep_14.1.0-1_amd64.deb
+
+          # Install bat
+          echo "Installing bat..."
+          curl -LO https://github.com/sharkdp/bat/releases/download/v0.24.0/bat_0.24.0_amd64.deb
+          sudo dpkg -i bat_0.24.0_amd64.deb
+          rm bat_0.24.0_amd64.deb
+
           # Install delta
-          curl -LO https://github.com/dandavison/delta/releases/download/0.17.0/git-delta_0.17.0_amd64.deb
-          sudo dpkg -i git-delta_0.17.0_amd64.deb
+          echo "Installing delta..."
+          curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/git-delta_0.18.2_amd64.deb
+          sudo dpkg -i git-delta_0.18.2_amd64.deb
+          rm git-delta_0.18.2_amd64.deb
+
+          # Install fzf (latest version for better compatibility)
+          echo "Installing fzf..."
+          curl -LO https://github.com/junegunn/fzf/releases/download/v0.55.0/fzf-0.55.0-linux_amd64.tar.gz
+          tar xzf fzf-0.55.0-linux_amd64.tar.gz
+          sudo mv fzf /usr/local/bin/
+          rm fzf-0.55.0-linux_amd64.tar.gz
 
       - name: Install system dependencies (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install tmux ripgrep fzf git-delta
+          brew install tmux ripgrep bat fzf git-delta
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -64,21 +83,25 @@ jobs:
           python --version
           echo "=== tmux version ==="
           tmux -V
-          echo "=== ripgrep version ==="
+          echo "=== ripgrep (rg) version ==="
           rg --version
-          echo "=== fzf version ==="
-          fzf --version
+          echo "=== bat version ==="
+          bat --version
           echo "=== delta version ==="
           delta --version
+          echo "=== fzf version ==="
+          fzf --version
+          echo "=== uv version ==="
+          uv --version
 
       - name: Run tests
         run: |
-          uv run pytest tests/test_rgi.py -v --tb=short --timeout=60
+          uv run pytest tests/ -v --tb=short --timeout=60
         env:
           TERM: xterm-256color
           CI: true
 
-      - name: Run type checking with ty
+      - name: Type check
         run: |
           uvx ty check
         continue-on-error: true # Don't fail the build on type errors for now
@@ -94,9 +117,8 @@ jobs:
 
   # Separate job for Windows testing with WSL
   test-windows:
-    name: Test on Windows with WSL (Optional)
+    name: Test on Windows with WSL
     runs-on: windows-latest
-    continue-on-error: true # Don't fail the entire workflow if Windows tests fail
     strategy:
       fail-fast: false
       matrix:
@@ -114,64 +136,134 @@ jobs:
           wsl-shell-user: runner
           additional-packages: |
             tmux
-            fzf
             ripgrep
             python3-pip
             python3-venv
             curl
             git
+            wget
 
-      # Skip delta installation on Windows - it's not essential for tests
-      # and causes hanging issues in CI
+      - name: Install bat
+        shell: wsl-bash {0}
+        timeout-minutes: 5
+        run: |
+          # Install bat binary directly without sudo
+          echo "Installing bat..."
+          mkdir -p $HOME/.local/bin
+          cd /tmp
+          curl -LO https://github.com/sharkdp/bat/releases/download/v0.24.0/bat-v0.24.0-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf bat-v0.24.0-x86_64-unknown-linux-gnu.tar.gz --no-same-owner 2>/dev/null || true
+          mv bat-v0.24.0-x86_64-unknown-linux-gnu/bat $HOME/.local/bin/
+          rm -rf bat-v0.24.0-x86_64-unknown-linux-gnu bat-v0.24.0-x86_64-unknown-linux-gnu.tar.gz
+          cd -
+          export PATH="$HOME/.local/bin:$PATH"
+          bat --version
+          echo "Bat installed successfully"
 
-      - name: Install minimal test dependencies in WSL
+      - name: Install delta
+        shell: wsl-bash {0}
+        timeout-minutes: 5
+        run: |
+          # Install delta binary directly without sudo
+          echo "Installing delta..."
+          mkdir -p $HOME/.local/bin
+          cd /tmp
+          curl -LO https://github.com/dandavison/delta/releases/download/0.18.2/delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz --no-same-owner 2>/dev/null || true
+          mv delta-0.18.2-x86_64-unknown-linux-gnu/delta $HOME/.local/bin/
+          rm -rf delta-0.18.2-x86_64-unknown-linux-gnu delta-0.18.2-x86_64-unknown-linux-gnu.tar.gz
+          cd -
+          export PATH="$HOME/.local/bin:$PATH"
+          delta --version
+          echo "Delta installed successfully"
+
+      - name: Install fzf
+        shell: wsl-bash {0}
+        timeout-minutes: 5
+        run: |
+          # Install newer fzf binary to support start: binding
+          echo "Installing newer fzf..."
+          cd /tmp
+          wget -q https://github.com/junegunn/fzf/releases/download/v0.55.0/fzf-0.55.0-linux_amd64.tar.gz
+          tar xzf fzf-0.55.0-linux_amd64.tar.gz
+          mkdir -p $HOME/.local/bin
+          mv fzf $HOME/.local/bin/
+          rm -f fzf-0.55.0-linux_amd64.tar.gz
+          cd -
+          export PATH="$HOME/.local/bin:$PATH"
+          fzf --version
+          echo "fzf installed successfully"
+
+      - name: Install rgi
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          # Minimal setup for Windows - just copy scripts and install pytest
-          echo "Installing pytest with system Python..."
-          python3 -m pip install --user pytest pytest-timeout || { echo "Failed to install pytest"; exit 1; }
+          # Install uv as recommended in README
+          echo "Installing uv..."
+          curl -LsSf https://astral.sh/uv/install.sh | sh
 
-          echo "Making scripts available..."
-          mkdir -p ~/.local/bin
-          cp src/rgi/scripts/* ~/.local/bin/
-          chmod +x ~/.local/bin/rgi*
+          # Add uv to PATH
           export PATH="$HOME/.local/bin:$PATH"
 
-          echo "Minimal dependencies installed successfully"
+          # Copy project to WSL filesystem to avoid permission issues
+          echo "Copying project to WSL filesystem..."
+          cp -r . /tmp/rgi-install
+          cd /tmp/rgi-install
 
-      - name: Verify installations in WSL
+          # Install rgi using uv tool install as per README
+          echo "Installing rgi with uv tool install..."
+          uv tool install .
+
+          # Go back to original directory
+          cd -
+
+          # Install pytest for testing
+          echo "Installing pytest for tests..."
+          python3 -m pip install --user pytest pytest-timeout
+
+          echo "Installation complete"
+
+      - name: Verify installations
         shell: wsl-bash {0}
         timeout-minutes: 2
         run: |
+          # Set up PATH for uv, delta, and tools
+          export PATH="$HOME/.local/bin:$PATH"
+
           echo "=== System info ==="
           uname -a
           echo "=== Python version ==="
           python3 --version
           echo "=== tmux version ==="
           tmux -V
-          echo "=== ripgrep version ==="
+          echo "=== ripgrep (rg) version ==="
           rg --version
+          echo "=== bat version ==="
+          bat --version
+          echo "=== delta version ==="
+          delta --version
           echo "=== fzf version ==="
           fzf --version
+          echo "=== uv version ==="
+          uv --version
           echo "=== pytest installed ==="
           python3 -m pytest --version || echo "pytest not found"
-          echo "=== rgi script available ==="
-          export PATH="$HOME/.local/bin:$PATH"
-          which rgi || echo "rgi not found"
-          echo "=== Note: Delta not installed on Windows CI ==="
+          echo "=== rgi installed ==="
+          which rgi
+          # Note: rgi doesn't support --help; it always runs interactively
 
-      - name: Run tests in WSL
+      - name: Run tests
         shell: wsl-bash {0}
         timeout-minutes: 10
         run: |
-          export TERM=xterm-256color
-          export CI=true
+          # Set up PATH for all tools (uv, bat, delta, fzf, rgi)
           export PATH="$HOME/.local/bin:$PATH"
 
-          # Run a subset of tests for Windows with system Python
-          python3 -m pytest tests/test_rgi.py::test_basic_pattern_search -v --tb=short --timeout=60 || true
-          python3 -m pytest tests/test_rgi.py::test_default_command_mode -v --tb=short --timeout=60 || true
+          export TERM=xterm-256color
+          export CI=true
+
+          # Run all tests against the uv-installed rgi
+          python3 -m pytest tests/ -v --tb=short --timeout=60
 
       - name: Upload test results on failure
         if: failure()

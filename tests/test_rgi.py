@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import subprocess
 import tempfile
@@ -12,6 +13,15 @@ from pathlib import Path
 from typing import Generator, List
 
 import pytest
+
+
+def is_wsl() -> bool:
+    """Check if we're running in WSL (Windows Subsystem for Linux).
+
+    WSL kernels include 'microsoft' in the release string.
+    This works for both WSL1 and WSL2.
+    """
+    return 'microsoft' in platform.uname().release.lower()
 
 TEST_INTERACTIVE = Path(__file__).parent / "test-interactive"
 
@@ -361,6 +371,10 @@ def test_typing_in_command_mode(test_fixture_dir, rgi_path):
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
+@pytest.mark.skipif(
+    is_wsl(),
+    reason="Complex keyboard editing in tmux doesn't work reliably in WSL CI environment"
+)
 def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
     """Test 12: Editing command in command mode updates results."""
     import subprocess
