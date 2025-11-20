@@ -93,8 +93,6 @@ def fzf_base() -> list[str]:
         "hidden",
         "--prompt",
         " ",
-        "--color",
-        "light",
         "--ansi",
         "--bind",
         "ctrl-k:kill-line",
