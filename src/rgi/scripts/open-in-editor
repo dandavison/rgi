@@ -20,11 +20,38 @@ case "$editor" in
     idea|intellij)
         open "idea://open?file=$file&line=$line"
         ;;
+    pycharm|charm)
+        # PyCharm command-line interface
+        if command -v charm >/dev/null 2>&1; then
+            charm --line "$line" "$file"
+        else
+            echo "Error: PyCharm command 'charm' not found. Please install PyCharm command-line launcher." >&2
+            exit 1
+        fi
+        ;;
     vscode|code)
         open "vscode://file/$file:$line"
         ;;
     cursor)
         open "cursor://file/$file:$line"
+        ;;
+    helix|hx)
+        # Helix editor - supports file:line:column format
+        if command -v hx >/dev/null 2>&1; then
+            hx "$file:$line"
+        else
+            echo "Error: Helix editor 'hx' not found. Please install Helix." >&2
+            exit 1
+        fi
+        ;;
+    zed)
+        # Zed editor - supports file:line:column format
+        if command -v zed >/dev/null 2>&1; then
+            zed "$file:$line"
+        else
+            echo "Error: Zed editor not found. Please install Zed." >&2
+            exit 1
+        fi
         ;;
     wormhole)
         wormhole "$file":"$line"
@@ -37,7 +64,7 @@ case "$editor" in
             "$editor" "+$line" "$file"
         else
             echo "Error: Unknown editor '$editor'. Set RGI_EDITOR or EDITOR to one of:" >&2
-            echo "idea, vscode, cursor, wormhole, vim" >&2
+            echo "idea, pycharm, vscode, cursor, helix, zed, wormhole, vim" >&2
             exit 1
         fi
         ;;
