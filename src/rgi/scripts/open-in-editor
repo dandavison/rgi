@@ -17,6 +17,20 @@ if [[ ! "$file" = /* ]]; then
 fi
 
 case "$editor" in
+    emacs|emacsclient)
+        # Emacs using emacsclient
+        if command -v emacsclient >/dev/null 2>&1; then
+            emacsclient --no-wait \
+                --eval "(find-file \"$file\")" \
+                --eval "(goto-line $line)" \
+                --eval "(recenter-top-bottom)" \
+                --eval "(select-frame-set-input-focus (selected-frame))" \
+                --eval "(when (functionp 'pulse-momentary-highlight-one-line) (let ((pulse-delay 0.05)) (pulse-momentary-highlight-one-line (point) 'highlight)))"
+        else
+            echo "Error: emacsclient not found. Please ensure Emacs server is running and emacsclient is installed." >&2
+            exit 1
+        fi
+        ;;
     idea|intellij)
         open "idea://open?file=$file&line=$line"
         ;;
@@ -64,7 +78,7 @@ case "$editor" in
             "$editor" "+$line" "$file"
         else
             echo "Error: Unknown editor '$editor'. Set RGI_EDITOR or EDITOR to one of:" >&2
-            echo "idea, pycharm, vscode, cursor, helix, zed, wormhole, vim" >&2
+            echo "emacs, idea, pycharm, vscode, cursor, helix, zed, wormhole, vim" >&2
             exit 1
         fi
         ;;

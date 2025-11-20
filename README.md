@@ -8,7 +8,7 @@ Then:
 
 ```
 uv tool install git+https://github.com/dandavison/rgi
-export RGI_EDITOR=vscode  # vscode | cursor | zed | vim | idea | pycharm | helix | wormhole
+export RGI_EDITOR=vscode  # vscode | cursor | idea | zed | vim  | emacs | pycharm | helix | wormhole
 ```
 
 <br>
