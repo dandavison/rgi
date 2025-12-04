@@ -87,6 +87,8 @@ def parse_ripgrep_config(config_path: str) -> str:
 def fzf_base() -> list[str]:
     return [
         "fzf",
+        "--height",
+        "100%",
         "--layout",
         "reverse",
         "--info",
@@ -101,7 +103,7 @@ def fzf_base() -> list[str]:
         "--bind",
         "alt-left:backward-word",
         "--preview-window",
-        "up,70%",
+        "up,50%",
     ]
 
 
