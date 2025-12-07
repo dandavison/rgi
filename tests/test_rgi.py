@@ -796,6 +796,68 @@ def test_history_saves_on_enter(test_fixture_dir, rgi_path):
             history_file.unlink()
 
 
+def test_incremental_typing_without_path(test_fixture_dir, rgi_path):
+    """Test: Typing a query without specifying a path should search current directory.
+
+    When user starts rgi with no arguments and types 'TODO', results should appear
+    immediately (searching current directory implicitly).
+    """
+    import subprocess
+
+    session_name = f"test-incremental-nopath-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
+    try:
+        # Start rgi with NO pattern and NO path
+        subprocess.run(
+            tmux_cmd(
+                socket,
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                test_fixture_dir,
+                f"{rgi_path} --rgi-command-mode",
+            ),
+            check=True,
+            timeout=5,
+        )
+        time.sleep(1.0)
+
+        # Type 'TODO' (no path specified)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "TODO"),
+            check=True,
+        )
+        time.sleep(1.5)
+
+        # Capture output
+        result = subprocess.run(
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout
+
+        # Should find TODO matches in current directory
+        assert "TODO" in output and (
+            "test_runner.py" in output
+            or "lib_prompt.sh" in output
+            or "app.js" in output
+            or "README.md" in output
+        ), f"Expected to find TODO results when typing without path, got:\n{output}"
+
+    finally:
+        subprocess.run(
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
+        )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
 def test_path_prefix_matching(test_fixture_dir, rgi_path):
     """Test: Path prefix matching - partial paths should match with implicit wildcard.
 
