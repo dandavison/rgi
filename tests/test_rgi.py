@@ -796,19 +796,19 @@ def test_history_saves_on_enter(test_fixture_dir, rgi_path):
             history_file.unlink()
 
 
-def test_incremental_typing_without_path(test_fixture_dir, rgi_path):
-    """Test: Typing a query without specifying a path should search current directory.
+def test_incremental_typing_with_explicit_path(test_fixture_dir, rgi_path):
+    """Test: rgi always shows explicit path (. for current dir).
 
-    When user starts rgi with no arguments and types 'TODO', results should appear
-    immediately (searching current directory implicitly).
+    rgi command format: rg <options+pattern> PATH
+    Path is always explicit and always last. User types pattern before the path.
     """
     import subprocess
 
-    session_name = f"test-incremental-nopath-{os.getpid()}"
+    session_name = f"test-incremental-explicit-{os.getpid()}"
     socket = get_test_tmux_socket(session_name)
 
     try:
-        # Start rgi with NO pattern and NO path
+        # Start rgi with NO pattern - should show 'rg .' with explicit current dir
         subprocess.run(
             tmux_cmd(
                 socket,
@@ -825,9 +825,13 @@ def test_incremental_typing_without_path(test_fixture_dir, rgi_path):
         )
         time.sleep(1.0)
 
-        # Type 'TODO' (no path specified)
+        # Clear line and type 'rg TODO .' (explicit path)
         subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "TODO"),
+            tmux_cmd(socket, "send-keys", "-t", session_name, "C-u"),
+            check=True,
+        )
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "rg TODO ."),
             check=True,
         )
         time.sleep(1.5)
@@ -847,7 +851,59 @@ def test_incremental_typing_without_path(test_fixture_dir, rgi_path):
             or "lib_prompt.sh" in output
             or "app.js" in output
             or "README.md" in output
-        ), f"Expected to find TODO results when typing without path, got:\n{output}"
+        ), f"Expected to find TODO results with explicit '.' path, got:\n{output}"
+
+    finally:
+        subprocess.run(
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
+        )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
+def test_path_prefix_matching_directory(test_fixture_dir, rgi_path):
+    """Test: Path prefix matching works for directory names without slashes.
+
+    If user types 'rg TODO sr', it should match 'src/' directory.
+    The last word is always the path, so it gets glob-expanded.
+    """
+    import subprocess
+
+    session_name = f"test-path-prefix-dir-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
+    try:
+        # Start rgi with partial directory name 'sr' (should match 'src/')
+        subprocess.run(
+            tmux_cmd(
+                socket,
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                test_fixture_dir,
+                f"{rgi_path} --rgi-command-mode TODO sr",
+            ),
+            check=True,
+            timeout=5,
+        )
+        time.sleep(1.5)
+
+        # Capture output
+        result = subprocess.run(
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout
+
+        # Should find results from src/ even though we only typed 'sr'
+        assert "test_runner.py" in output or "app.js" in output, (
+            f"Expected files from 'src/' to match path prefix 'sr', got:\n{output}"
+        )
 
     finally:
         subprocess.run(

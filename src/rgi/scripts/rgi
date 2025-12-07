@@ -118,21 +118,19 @@ def build_command_mode_fzf(
     ripgrep_config_path: str,
     implicit_opts: str,
 ) -> list[str]:
-    paths_str = " ".join(paths)
+    # rgi command format: rg <options+pattern> PATH
+    # Path is always explicit (defaults to .) and always last
+    paths_str = " ".join(paths) if paths else "."
     quoted_pattern = shlex.quote(pattern) if pattern else ""
-    # Normalize spaces; only add trailing space if no paths (so user can start typing path)
-    # Don't add trailing space when paths exist, so prefix matching works on initial load
     full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
-    if not paths:
-        full_command += " "
 
-    # Path prefix matching: expand last argument with glob if it doesn't exist as-is
-    # User can add trailing space to disable this (use literal path)
-    # Only expand if last word contains '/' (looks like a path, not a pattern)
+    # Path prefix matching: last word is always the path
+    # Expand with glob if it doesn't exist as-is
+    # Trailing space disables expansion (escape hatch for literal paths)
     glob_expand = """
         if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
             last="${cmd##* }";
-            if [[ "$last" == */* && "$last" != -* && ! -e "$last" && -n "$last" ]]; then
+            if [[ "$last" != -* && ! -e "$last" && -n "$last" ]]; then
                 shopt -s nullglob;
                 matches=( ${last}* );
                 shopt -u nullglob;
