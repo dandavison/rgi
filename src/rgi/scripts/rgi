@@ -120,11 +120,31 @@ def build_command_mode_fzf(
 ) -> list[str]:
     paths_str = " ".join(paths)
     quoted_pattern = shlex.quote(pattern) if pattern else ""
-    # Normalize spaces and ensure trailing space
-    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split()) + " "
+    # Normalize spaces; only add trailing space if no paths (so user can start typing path)
+    # Don't add trailing space when paths exist, so prefix matching works on initial load
+    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+    if not paths:
+        full_command += " "
+
+    # Path prefix matching: expand last argument with glob if it doesn't exist as-is
+    # User can add trailing space to disable this (use literal path)
+    glob_expand = """
+        if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
+            last="${cmd##* }";
+            if [[ "$last" != -* && ! -e "$last" && -n "$last" ]]; then
+                shopt -s nullglob;
+                matches=( ${last}* );
+                shopt -u nullglob;
+                if [[ ${#matches[@]} -gt 0 ]]; then
+                    cmd="${cmd% *} ${matches[*]}";
+                fi;
+            fi;
+        fi;
+    """.replace("\n", " ").strip()
 
     reload_cmd = f"""
         cmd={{q}};
+        {glob_expand}
         if [[ "$cmd" =~ ^rg ]]; then
             cmd="${{cmd#rg}}";
             cmd="rg {config_args} {implicit_opts}$cmd";

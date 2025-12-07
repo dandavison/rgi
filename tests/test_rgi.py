@@ -796,6 +796,59 @@ def test_history_saves_on_enter(test_fixture_dir, rgi_path):
             history_file.unlink()
 
 
+def test_path_prefix_matching(test_fixture_dir, rgi_path):
+    """Test: Path prefix matching - partial paths should match with implicit wildcard.
+
+    If user types 'rg TODO src/te', it should match files in 'src/test_runner.py'
+    as if they had typed 'rg TODO src/te*'.
+    """
+    import subprocess
+
+    session_name = f"test-path-prefix-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
+    try:
+        # Start rgi with a PARTIAL path 'src/te' (should match 'src/test_runner.py')
+        subprocess.run(
+            tmux_cmd(
+                socket,
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                test_fixture_dir,
+                # Note: 'src/te' is a prefix of 'src/test_runner.py'
+                f"{rgi_path} --rgi-command-mode TODO src/te",
+            ),
+            check=True,
+            timeout=5,
+        )
+        time.sleep(1.5)
+
+        # Capture output
+        result = subprocess.run(
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout
+
+        # Should find results from src/test_runner.py even though we only typed 'src/te'
+        assert "test_runner.py" in output, (
+            f"Expected 'test_runner.py' to match path prefix 'src/te', got:\n{output}"
+        )
+
+    finally:
+        subprocess.run(
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
+        )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
 @pytest.mark.xfail(reason="Known issue: patterns with spaces not working on initial launch")
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_patterns_with_spaces(test_fixture_dir, rgi_path, mode):
