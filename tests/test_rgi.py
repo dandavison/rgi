@@ -862,6 +862,70 @@ def test_incremental_typing_with_explicit_path(test_fixture_dir, rgi_path):
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
+def test_cursor_position_with_glob_matching_pattern(test_fixture_dir, rgi_path):
+    """Test: Cursor should be before '.' even when pattern matches paths via glob.
+
+    Bug: When starting with a pattern like 'sr' that glob-matches 'src/',
+    the cursor was ending up after the '.' instead of before it.
+    """
+    import subprocess
+
+    session_name = f"test-cursor-glob-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
+    try:
+        # Start rgi with pattern 'sr' which glob-matches 'src/'
+        subprocess.run(
+            tmux_cmd(
+                socket,
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                test_fixture_dir,
+                f"{rgi_path} --rgi-command-mode sr",
+            ),
+            check=True,
+            timeout=5,
+        )
+        time.sleep(1.5)
+
+        # Type 'c' - if cursor is correctly positioned before ' .',
+        # the query should become 'rg src .' not 'rg sr .c'
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "c"),
+            check=True,
+        )
+        time.sleep(0.5)
+
+        # Capture output
+        result = subprocess.run(
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout
+
+        # The query line should show 'rg src .' (c inserted before space-dot)
+        # NOT 'rg sr .c' (c appended after dot)
+        assert "rg src ." in output or "rg src" in output, (
+            f"Expected cursor to be before '.' so typing 'c' gives 'rg src .', got:\n{output}"
+        )
+        assert ".c" not in output, (
+            f"Cursor was after '.', typing 'c' gave '.c' instead of 'src', got:\n{output}"
+        )
+
+    finally:
+        subprocess.run(
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
+        )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
 def test_path_prefix_matching_directory(test_fixture_dir, rgi_path):
     """Test: Path prefix matching works for directory names without slashes.
 

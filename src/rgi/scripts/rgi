@@ -173,9 +173,9 @@ def build_command_mode_fzf(
         "--bind",
         f"start:reload:{reload_cmd}",
         # When using default path '.', position cursor before it so user can type pattern
-        # unbind(load) ensures this only happens once, not on every reload
+        # Use result event (fires after filtering) and unbind to run only once
         "--bind",
-        "load:backward-char+backward-char+unbind(load)" if not paths else "load:ignore",
+        "result:backward-char+backward-char+unbind(result)" if not paths else "result:ignore",
         "--bind",
         f"change:reload:{reload_cmd}",
         "--bind",
