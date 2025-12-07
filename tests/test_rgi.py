@@ -796,6 +796,177 @@ def test_history_saves_on_enter(test_fixture_dir, rgi_path):
             history_file.unlink()
 
 
+def test_incremental_typing_with_explicit_path(test_fixture_dir, rgi_path):
+    """Test: rgi always shows explicit path (. for current dir).
+
+    rgi command format: rg <options+pattern> PATH
+    Path is always explicit and always last. User types pattern before the path.
+    """
+    import subprocess
+
+    session_name = f"test-incremental-explicit-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
+    try:
+        # Start rgi with NO pattern - should show 'rg .' with explicit current dir
+        subprocess.run(
+            tmux_cmd(
+                socket,
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                test_fixture_dir,
+                f"{rgi_path} --rgi-command-mode",
+            ),
+            check=True,
+            timeout=5,
+        )
+        time.sleep(1.0)
+
+        # Clear line and type 'rg TODO .' (explicit path)
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "C-u"),
+            check=True,
+        )
+        subprocess.run(
+            tmux_cmd(socket, "send-keys", "-t", session_name, "rg TODO ."),
+            check=True,
+        )
+        time.sleep(1.5)
+
+        # Capture output
+        result = subprocess.run(
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout
+
+        # Should find TODO matches in current directory
+        assert "TODO" in output and (
+            "test_runner.py" in output
+            or "lib_prompt.sh" in output
+            or "app.js" in output
+            or "README.md" in output
+        ), f"Expected to find TODO results with explicit '.' path, got:\n{output}"
+
+    finally:
+        subprocess.run(
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
+        )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
+def test_path_prefix_matching_directory(test_fixture_dir, rgi_path):
+    """Test: Path prefix matching works for directory names without slashes.
+
+    If user types 'rg TODO sr', it should match 'src/' directory.
+    The last word is always the path, so it gets glob-expanded.
+    """
+    import subprocess
+
+    session_name = f"test-path-prefix-dir-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
+    try:
+        # Start rgi with partial directory name 'sr' (should match 'src/')
+        subprocess.run(
+            tmux_cmd(
+                socket,
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                test_fixture_dir,
+                f"{rgi_path} --rgi-command-mode TODO sr",
+            ),
+            check=True,
+            timeout=5,
+        )
+        time.sleep(1.5)
+
+        # Capture output
+        result = subprocess.run(
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout
+
+        # Should find results from src/ even though we only typed 'sr'
+        assert "test_runner.py" in output or "app.js" in output, (
+            f"Expected files from 'src/' to match path prefix 'sr', got:\n{output}"
+        )
+
+    finally:
+        subprocess.run(
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
+        )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
+def test_path_prefix_matching(test_fixture_dir, rgi_path):
+    """Test: Path prefix matching - partial paths should match with implicit wildcard.
+
+    If user types 'rg TODO src/te', it should match files in 'src/test_runner.py'
+    as if they had typed 'rg TODO src/te*'.
+    """
+    import subprocess
+
+    session_name = f"test-path-prefix-{os.getpid()}"
+    socket = get_test_tmux_socket(session_name)
+
+    try:
+        # Start rgi with a PARTIAL path 'src/te' (should match 'src/test_runner.py')
+        subprocess.run(
+            tmux_cmd(
+                socket,
+                "new-session",
+                "-d",
+                "-s",
+                session_name,
+                "-c",
+                test_fixture_dir,
+                # Note: 'src/te' is a prefix of 'src/test_runner.py'
+                f"{rgi_path} --rgi-command-mode TODO src/te",
+            ),
+            check=True,
+            timeout=5,
+        )
+        time.sleep(1.5)
+
+        # Capture output
+        result = subprocess.run(
+            tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout
+
+        # Should find results from src/test_runner.py even though we only typed 'src/te'
+        assert "test_runner.py" in output, (
+            f"Expected 'test_runner.py' to match path prefix 'src/te', got:\n{output}"
+        )
+
+    finally:
+        subprocess.run(
+            tmux_cmd(socket, "kill-session", "-t", session_name),
+            capture_output=True,
+            timeout=5,
+        )
+        subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
 @pytest.mark.xfail(reason="Known issue: patterns with spaces not working on initial launch")
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_patterns_with_spaces(test_fixture_dir, rgi_path, mode):

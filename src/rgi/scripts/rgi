@@ -118,13 +118,32 @@ def build_command_mode_fzf(
     ripgrep_config_path: str,
     implicit_opts: str,
 ) -> list[str]:
-    paths_str = " ".join(paths)
+    # rgi command format: rg <options+pattern> PATH
+    # Path is always explicit (defaults to .) and always last
+    paths_str = " ".join(paths) if paths else "."
     quoted_pattern = shlex.quote(pattern) if pattern else ""
-    # Normalize spaces and ensure trailing space
-    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split()) + " "
+    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+
+    # Path prefix matching: last word is always the path
+    # Expand with glob if it doesn't exist as-is
+    # Trailing space disables expansion (escape hatch for literal paths)
+    glob_expand = """
+        if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
+            last="${cmd##* }";
+            if [[ "$last" != -* && ! -e "$last" && -n "$last" ]]; then
+                shopt -s nullglob;
+                matches=( ${last}* );
+                shopt -u nullglob;
+                if [[ ${#matches[@]} -gt 0 ]]; then
+                    cmd="${cmd% *} ${matches[*]}";
+                fi;
+            fi;
+        fi;
+    """.replace("\n", " ").strip()
 
     reload_cmd = f"""
         cmd={{q}};
+        {glob_expand}
         if [[ "$cmd" =~ ^rg ]]; then
             cmd="${{cmd#rg}}";
             cmd="rg {config_args} {implicit_opts}$cmd";
@@ -153,6 +172,10 @@ def build_command_mode_fzf(
         str(HISTORY_FILE),
         "--bind",
         f"start:reload:{reload_cmd}",
+        # When using default path '.', position cursor before it so user can type pattern
+        # unbind(load) ensures this only happens once, not on every reload
+        "--bind",
+        "load:backward-char+backward-char+unbind(load)" if not paths else "load:ignore",
         "--bind",
         f"change:reload:{reload_cmd}",
         "--bind",
