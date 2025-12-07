@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+HISTORY_FILE = Path.home() / ".rgi_history"
+
 
 def main() -> None:
     script_dir = str(Path(__file__).resolve().parent)
@@ -133,6 +135,11 @@ def build_command_mode_fzf(
     env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
     tab_execute = f"{env_prefix} rgi-switch-mode pattern {{q}}"
 
+    # Save to history before opening editor (fzf's --history only saves on exit, but rgi persists)
+    history_file = str(HISTORY_FILE)
+    save_history = f'[[ "$(tail -1 {history_file} 2>/dev/null)" != {{q}} ]] && echo {{q}} >> {history_file};'
+    enter_execute = f"{save_history} open-in-editor {{1}} {{2}}"
+
     cmd = fzf_base() + [
         "-d:",
         "--query",
@@ -142,6 +149,8 @@ def build_command_mode_fzf(
         config_args if config_args else "",
         "--preview",
         "[[ -n {1} ]] && rgi-preview {1} {2}",
+        "--history",
+        str(HISTORY_FILE),
         "--bind",
         f"start:reload:{reload_cmd}",
         "--bind",
@@ -149,7 +158,15 @@ def build_command_mode_fzf(
         "--bind",
         f"tab:execute:{tab_execute}",
         "--bind",
-        "enter:execute:open-in-editor {1} {2}",
+        f"enter:execute:{enter_execute}",
+        "--bind",
+        "alt-up:prev-history",
+        "--bind",
+        "alt-down:next-history",
+        "--bind",
+        "ctrl-p:up",
+        "--bind",
+        "ctrl-n:down",
     ]
 
     return cmd

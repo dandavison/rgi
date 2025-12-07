@@ -651,6 +651,151 @@ def test_options_not_duplicated(test_fixture_dir, rgi_path):
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
+def test_history_navigation(test_fixture_dir, rgi_path):
+    """Test: Alt+Up/Alt+Down navigates search history in command mode."""
+    import subprocess
+
+    # Create a history file with a previous search
+    history_file = Path.home() / ".rgi_history"
+    original_history = None
+    if history_file.exists():
+        original_history = history_file.read_text()
+
+    try:
+        # Write a known history entry
+        history_file.write_text("rg PREVIOUS_HISTORY_ENTRY .\n")
+
+        # Create a tmux session
+        session_name = f"test-history-{os.getpid()}"
+        socket = get_test_tmux_socket(session_name)
+
+        try:
+            # Start rgi in command mode with a different query
+            subprocess.run(
+                tmux_cmd(
+                    socket,
+                    "new-session",
+                    "-d",
+                    "-s",
+                    session_name,
+                    "-c",
+                    test_fixture_dir,
+                    f"{rgi_path} --rgi-command-mode TODO .",
+                ),
+                check=True,
+                timeout=5,
+            )
+            time.sleep(1.5)
+
+            # Press Alt+Up to go to previous history
+            subprocess.run(
+                tmux_cmd(socket, "send-keys", "-t", session_name, "M-Up"),
+                check=True,
+            )
+            time.sleep(0.5)
+
+            # Capture output
+            result = subprocess.run(
+                tmux_cmd(socket, "capture-pane", "-t", session_name, "-p"),
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            output = result.stdout
+
+            # The query line should now show the history entry
+            assert "PREVIOUS_HISTORY_ENTRY" in output, (
+                f"Expected history entry 'PREVIOUS_HISTORY_ENTRY' after Alt+Up, got:\n{output}"
+            )
+
+        finally:
+            subprocess.run(
+                tmux_cmd(socket, "kill-session", "-t", session_name),
+                capture_output=True,
+                timeout=5,
+            )
+            subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+    finally:
+        # Restore original history
+        if original_history is not None:
+            history_file.write_text(original_history)
+        elif history_file.exists():
+            history_file.unlink()
+
+
+def test_history_saves_on_enter(test_fixture_dir, rgi_path):
+    """Test: History is saved when pressing Enter to open a result."""
+    import subprocess
+
+    history_file = Path.home() / ".rgi_history"
+    original_history = None
+    if history_file.exists():
+        original_history = history_file.read_text()
+
+    try:
+        # Start with empty history
+        if history_file.exists():
+            history_file.unlink()
+
+        session_name = f"test-history-save-{os.getpid()}"
+        socket = get_test_tmux_socket(session_name)
+
+        try:
+            # Start rgi with a unique query
+            subprocess.run(
+                tmux_cmd(
+                    socket,
+                    "new-session",
+                    "-d",
+                    "-s",
+                    session_name,
+                    "-c",
+                    test_fixture_dir,
+                    f"{rgi_path} --rgi-command-mode TODO .",
+                ),
+                check=True,
+                timeout=5,
+            )
+            time.sleep(1.5)
+
+            # Press Enter to select a result (this should save to history)
+            subprocess.run(
+                tmux_cmd(socket, "send-keys", "-t", session_name, "Enter"),
+                check=True,
+            )
+            time.sleep(1.0)
+
+            # Press Escape to exit the editor (vim/nvim)
+            subprocess.run(
+                tmux_cmd(socket, "send-keys", "-t", session_name, "Escape", ":q!", "Enter"),
+                check=True,
+            )
+            time.sleep(0.5)
+
+        finally:
+            subprocess.run(
+                tmux_cmd(socket, "kill-session", "-t", session_name),
+                capture_output=True,
+                timeout=5,
+            )
+            subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+        # Check that history file now contains the query
+        assert history_file.exists(), "History file should exist after pressing Enter"
+        history_content = history_file.read_text()
+        assert "rg TODO ." in history_content, (
+            f"Expected 'rg TODO .' in history file, got:\n{history_content}"
+        )
+
+    finally:
+        # Restore original history
+        if original_history is not None:
+            history_file.write_text(original_history)
+        elif history_file.exists():
+            history_file.unlink()
+
+
 @pytest.mark.xfail(reason="Known issue: patterns with spaces not working on initial launch")
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_patterns_with_spaces(test_fixture_dir, rgi_path, mode):
