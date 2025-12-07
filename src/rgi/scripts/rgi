@@ -159,9 +159,6 @@ def build_command_mode_fzf(
     save_history = f'[[ "$(tail -1 {history_file} 2>/dev/null)" != {{q}} ]] && echo {{q}} >> {history_file};'
     enter_execute = f"{save_history} open-in-editor {{1}} {{2}}"
 
-    # When using default path '.', position cursor before it so user can type pattern
-    cursor_adjust = "+backward-char+backward-char" if not paths else ""
-
     cmd = fzf_base() + [
         "-d:",
         "--query",
@@ -174,7 +171,11 @@ def build_command_mode_fzf(
         "--history",
         str(HISTORY_FILE),
         "--bind",
-        f"start:reload:{reload_cmd}{cursor_adjust}",
+        f"start:reload:{reload_cmd}",
+        # When using default path '.', position cursor before it so user can type pattern
+        # unbind(load) ensures this only happens once, not on every reload
+        "--bind",
+        "load:backward-char+backward-char+unbind(load)" if not paths else "load:ignore",
         "--bind",
         f"change:reload:{reload_cmd}",
         "--bind",
