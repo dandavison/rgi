@@ -128,10 +128,11 @@ def build_command_mode_fzf(
 
     # Path prefix matching: expand last argument with glob if it doesn't exist as-is
     # User can add trailing space to disable this (use literal path)
+    # Only expand if last word contains '/' (looks like a path, not a pattern)
     glob_expand = """
         if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
             last="${cmd##* }";
-            if [[ "$last" != -* && ! -e "$last" && -n "$last" ]]; then
+            if [[ "$last" == */* && "$last" != -* && ! -e "$last" && -n "$last" ]]; then
                 shopt -s nullglob;
                 matches=( ${last}* );
                 shopt -u nullglob;
