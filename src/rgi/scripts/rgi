@@ -123,6 +123,9 @@ def build_command_mode_fzf(
     paths_str = " ".join(paths) if paths else "."
     quoted_pattern = shlex.quote(pattern) if pattern else ""
     full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+    # Add space before path when no pattern, so cursor lands between "rg " and " ."
+    if not pattern and not paths:
+        full_command = "rg  ."  # Two spaces: "rg | ." with cursor in middle
 
     # Path prefix matching: last word is always the path
     # Expand with glob if it doesn't exist as-is
