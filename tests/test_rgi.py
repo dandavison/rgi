@@ -107,11 +107,13 @@ def tmux_cmd(socket: str, *args: str) -> List[str]:
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_basic_pattern_search(test_fixture_dir, rgi_path, mode):
     """Test 1: Basic pattern search for TODO in both modes."""
+    if mode == "pattern":
+        pytest.skip("Pattern mode removed")
     # Run rgi with TODO pattern
     if mode == "pattern":
         command = f"{rgi_path} --rgi-pattern-mode TODO ."
     else:  # command mode
-        command = f"{rgi_path} --rgi-command-mode TODO ."
+        command = f"{rgi_path} TODO ."
     output = run_rgi_test(command)
 
     # Check that TODO appears in the output
@@ -129,11 +131,13 @@ def test_basic_pattern_search(test_fixture_dir, rgi_path, mode):
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_search_specific_directory(test_fixture_dir, rgi_path, mode):
     """Test 2: Search in specific directory in both modes."""
+    if mode == "pattern":
+        pytest.skip("Pattern mode removed")
     # Run rgi with TODO pattern in shell-config directory
     if mode == "pattern":
         command = f"{rgi_path} --rgi-pattern-mode TODO shell-config"
     else:  # command mode
-        command = f"{rgi_path} --rgi-command-mode TODO shell-config"
+        command = f"{rgi_path} TODO shell-config"
     output = run_rgi_test(command)
 
     # Check that we find the lib_prompt.sh file
@@ -153,11 +157,13 @@ def test_search_specific_directory(test_fixture_dir, rgi_path, mode):
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_search_multiple_paths(test_fixture_dir, rgi_path, mode):
     """Test 3: Search in multiple paths in both modes."""
+    if mode == "pattern":
+        pytest.skip("Pattern mode removed")
     # Run rgi with TODO pattern in both shell-config and src directories
     if mode == "pattern":
         command = f"{rgi_path} --rgi-pattern-mode TODO shell-config src"
     else:  # command mode
-        command = f"{rgi_path} --rgi-command-mode TODO shell-config src"
+        command = f"{rgi_path} TODO shell-config src"
     output = run_rgi_test(command)
 
     # Check that we find files from both directories
@@ -175,11 +181,13 @@ def test_search_multiple_paths(test_fixture_dir, rgi_path, mode):
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_glob_filter_python_files(test_fixture_dir, rgi_path, mode):
     """Test 4: Search with glob filter for Python files in both modes."""
+    if mode == "pattern":
+        pytest.skip("Pattern mode removed")
     # Run rgi with glob filter for .py files
     if mode == "pattern":
         command = f"{rgi_path} -g '*.py' --rgi-pattern-mode test ."
     else:  # command mode
-        command = f"{rgi_path} -g '*.py' --rgi-command-mode test ."
+        command = f"{rgi_path} -g '*.py' test ."
     output = run_rgi_test(command)
 
     # Check that we only find Python files
@@ -200,11 +208,13 @@ def test_glob_filter_python_files(test_fixture_dir, rgi_path, mode):
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_fzf_ui_renders(test_fixture_dir, rgi_path, mode):
     """Test 6: Check if fzf UI loads correctly in both modes."""
+    if mode == "pattern":
+        pytest.skip("Pattern mode removed")
     # Run rgi and check for UI elements
     if mode == "pattern":
         command = f"{rgi_path} --rgi-pattern-mode test ."
     else:  # command mode
-        command = f"{rgi_path} --rgi-command-mode test ."
+        command = f"{rgi_path} test ."
     output = run_rgi_test(command)
 
     # Check for fzf UI separator lines (these appear in the output)
@@ -216,11 +226,13 @@ def test_fzf_ui_renders(test_fixture_dir, rgi_path, mode):
 @pytest.mark.parametrize("mode", ["pattern", "command"])
 def test_preview_window_displays(test_fixture_dir, rgi_path, mode):
     """Test 7: Check preview window displays in both modes."""
+    if mode == "pattern":
+        pytest.skip("Pattern mode removed")
     # Run rgi with function pattern in src directory
     if mode == "pattern":
         command = f"{rgi_path} --rgi-pattern-mode function src"
     else:  # command mode
-        command = f"{rgi_path} --rgi-command-mode function src"
+        command = f"{rgi_path} function src"
     output = run_rgi_test(command)
 
     # Check for preview window border characters
@@ -250,6 +262,7 @@ def test_tab_switches_to_command_mode_skip():
     pytest.skip("Test 9 is skipped as Test 11 covers command mode switching")
 
 
+@pytest.mark.skip(reason="Pattern mode removed")
 def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path):
     """Test 10: Tab toggles back to pattern mode."""
     import subprocess
@@ -309,6 +322,7 @@ def test_tab_toggles_back_to_pattern_mode(test_fixture_dir, rgi_path):
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
+@pytest.mark.skip(reason="Pattern mode removed - test starts in pattern mode")
 def test_typing_in_command_mode(test_fixture_dir, rgi_path):
     """Test 11: Typing in command mode shows results."""
     import subprocess
@@ -375,6 +389,7 @@ def test_typing_in_command_mode(test_fixture_dir, rgi_path):
     is_wsl(),
     reason="Complex keyboard editing in tmux doesn't work reliably in WSL CI environment"
 )
+@pytest.mark.skip(reason="Pattern mode removed - test starts in pattern mode")
 def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
     """Test 12: Editing command in command mode updates results."""
     import subprocess
@@ -445,6 +460,7 @@ def test_editing_command_mode_updates_results(test_fixture_dir, rgi_path):
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
+@pytest.mark.skip(reason="Pattern mode removed - test starts in pattern mode")
 def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
     """Test 13: Path changes are retained when switching modes."""
     import subprocess
@@ -516,6 +532,7 @@ def test_path_retention_switching_modes(test_fixture_dir, rgi_path):
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
+@pytest.mark.skip(reason="Pattern mode removed - test starts in pattern mode")
 def test_glob_pattern_retention(test_fixture_dir, rgi_path):
     """Test 14: Glob patterns are retained when switching modes."""
     import subprocess
@@ -588,6 +605,7 @@ def test_glob_pattern_retention(test_fixture_dir, rgi_path):
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
 
 
+@pytest.mark.skip(reason="Pattern mode removed - test starts in pattern mode")
 def test_options_not_duplicated(test_fixture_dir, rgi_path):
     """Test 15: Options not duplicated on repeated mode switches."""
     import subprocess
@@ -680,7 +698,7 @@ def test_history_navigation(test_fixture_dir, rgi_path):
                     session_name,
                     "-c",
                     test_fixture_dir,
-                    f"{rgi_path} --rgi-command-mode TODO .",
+                    f"{rgi_path} TODO .",
                 ),
                 check=True,
                 timeout=5,
@@ -752,7 +770,7 @@ def test_history_saves_on_enter(test_fixture_dir, rgi_path):
                     session_name,
                     "-c",
                     test_fixture_dir,
-                    f"{rgi_path} --rgi-command-mode TODO .",
+                    f"{rgi_path} TODO .",
                 ),
                 check=True,
                 timeout=5,
@@ -884,7 +902,7 @@ def test_cursor_position_with_glob_matching_pattern(test_fixture_dir, rgi_path):
                 session_name,
                 "-c",
                 test_fixture_dir,
-                f"{rgi_path} --rgi-command-mode sr",
+                f"{rgi_path} sr",
             ),
             check=True,
             timeout=5,
@@ -948,7 +966,7 @@ def test_path_prefix_matching_directory(test_fixture_dir, rgi_path):
                 session_name,
                 "-c",
                 test_fixture_dir,
-                f"{rgi_path} --rgi-command-mode TODO sr",
+                f"{rgi_path} TODO sr",
             ),
             check=True,
             timeout=5,
@@ -1001,7 +1019,7 @@ def test_path_prefix_matching(test_fixture_dir, rgi_path):
                 "-c",
                 test_fixture_dir,
                 # Note: 'src/te' is a prefix of 'src/test_runner.py'
-                f"{rgi_path} --rgi-command-mode TODO src/te",
+                f"{rgi_path} TODO src/te",
             ),
             check=True,
             timeout=5,
@@ -1039,6 +1057,8 @@ def test_patterns_with_spaces(test_fixture_dir, rgi_path, mode):
     Note: This test was failing in the original shell test suite.
     The issue persists: patterns with spaces don't work on initial launch.
     """
+    if mode == "pattern":
+        pytest.skip("Pattern mode removed")
 
     # Create test file with specific content
     test_dir = Path(test_fixture_dir) / "test-spaces"
@@ -1055,7 +1075,7 @@ func OtherFunction() {}
     if mode == "pattern":
         command = f"{rgi_path} --rgi-pattern-mode '{pattern}' {test_dir}"
     else:  # command mode
-        command = f"{rgi_path} --rgi-command-mode '{pattern}' {test_dir}"
+        command = f"{rgi_path} '{pattern}' {test_dir}"
     output = run_rgi_test(command, sleep_time=1)
 
     # Check that we find the function
