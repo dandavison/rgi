@@ -12,44 +12,30 @@ def main() -> None:
     script_dir = str(Path(__file__).resolve().parent)
     os.environ["PATH"] = f"{script_dir}:{os.environ.get('PATH', '')}"
 
-    mode, pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
+    pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
 
     ripgrep_config_path = os.environ.get("RIPGREP_CONFIG_PATH", "")
     config_args = parse_ripgrep_config(ripgrep_config_path)
 
     implicit_opts = "--json"
-    rg = " ".join(f"rg {config_args} {rg_opts} {implicit_opts}".split())
     delta = "delta --grep-output-type classic"
 
-    fzf_cmd = (
-        build_command_mode_fzf(
-            pattern, paths, rg_opts, config_args, delta, ripgrep_config_path, implicit_opts
-        )
-        if mode == "command"
-        else build_pattern_mode_fzf(
-            pattern, paths, rg_opts, config_args, rg, delta, ripgrep_config_path
-        )
+    fzf_cmd = build_command_mode_fzf(
+        pattern, paths, rg_opts, config_args, delta, ripgrep_config_path, implicit_opts
     )
 
     fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
     sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True, executable="/bin/bash"))
 
 
-def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
+def parse_arguments(argv: list[str]) -> tuple[str, list[str], str]:
     pattern = ""
     paths = []
     rg_opts = ""
-    mode = "command"
 
     i = 0
     while i < len(argv):
-        if argv[i] == "--rgi-command-mode":
-            mode = "command"
-            i += 1
-        elif argv[i] == "--rgi-pattern-mode":
-            mode = "pattern"
-            i += 1
-        elif argv[i].startswith("-"):
+        if argv[i].startswith("-"):
             opt = argv[i]
             rg_opts += f" {opt}"
             i += 1
@@ -66,7 +52,7 @@ def parse_arguments(argv: list[str]) -> tuple[str, str, list[str], str]:
         paths.append(argv[i])
         i += 1
 
-    return mode, pattern, paths, rg_opts.strip()
+    return pattern, paths, rg_opts.strip()
 
 
 def parse_ripgrep_config(config_path: str) -> str:
@@ -154,9 +140,6 @@ def build_command_mode_fzf(
         RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
     """.replace("\n", " ").strip()
 
-    env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
-    tab_execute = f"{env_prefix} rgi-switch-mode pattern {{q}}"
-
     # Save to history before opening editor (fzf's --history only saves on exit, but rgi persists)
     history_file = str(HISTORY_FILE)
     save_history = f'[[ "$(tail -1 {history_file} 2>/dev/null)" != {{q}} ]] && echo {{q}} >> {history_file};'
@@ -182,8 +165,6 @@ def build_command_mode_fzf(
         "--bind",
         f"change:reload:{reload_cmd}",
         "--bind",
-        f"tab:execute:{tab_execute}",
-        "--bind",
         f"enter:execute:{enter_execute}",
         "--bind",
         "alt-up:prev-history",
@@ -193,48 +174,6 @@ def build_command_mode_fzf(
         "ctrl-p:up",
         "--bind",
         "ctrl-n:down",
-    ]
-
-    return cmd
-
-
-def build_pattern_mode_fzf(
-    pattern: str,
-    paths: list[str],
-    rg_opts: str,
-    config_args: str,
-    rg: str,
-    delta: str,
-    ripgrep_config_path: str,
-) -> list[str]:
-    paths_str = " ".join(paths)
-    quoted_pattern = shlex.quote(pattern) if pattern else ""
-
-    start_reload = f"RIPGREP_CONFIG_PATH= {rg} {quoted_pattern} {paths_str} 2>/dev/null | {delta}"
-    change_reload = f"RIPGREP_CONFIG_PATH= {rg} {{q}} {paths_str} 2>/dev/null | {delta}"
-
-    env_prefix = f'RIPGREP_CONFIG_PATH="{ripgrep_config_path}"' if ripgrep_config_path else ""
-    tab_execute = f"{env_prefix} rgi-switch-mode command {{q}} {rg_opts} {paths_str}"
-
-    header = " ".join(f"rg {config_args} {rg_opts} {{q}} {paths_str}".split())
-
-    cmd = fzf_base() + [
-        "-d:",
-        "--query",
-        f"{pattern} " if pattern else "",
-        "--phony",
-        "--header",
-        header,
-        "--preview",
-        "[[ -n {1} ]] && rgi-preview {1} {2}",
-        "--bind",
-        f"start:reload:{start_reload}",
-        "--bind",
-        f"change:reload:{change_reload}",
-        "--bind",
-        f"tab:execute:{tab_execute}",
-        "--bind",
-        "enter:execute:open-in-editor {1} {2}",
     ]
 
     return cmd
