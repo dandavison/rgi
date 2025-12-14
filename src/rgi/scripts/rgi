@@ -20,9 +20,10 @@ def main() -> None:
     implicit_opts = "--json"
     delta = "delta --grep-output-type classic"
 
-    fzf_cmd = build_command_mode_fzf(pattern, paths, rg_opts, config_args, delta, implicit_opts)
-
-    fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
+    fzf_cmd_str = " ".join(
+        shlex.quote(arg)
+        for arg in build_fzf_command(pattern, paths, rg_opts, config_args, delta, implicit_opts)
+    )
     sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True, executable="/bin/bash"))
 
 
@@ -93,7 +94,7 @@ def fzf_base() -> list[str]:
     ]
 
 
-def build_command_mode_fzf(
+def build_fzf_command(
     pattern: str,
     paths: list[str],
     rg_opts: str,
@@ -105,9 +106,21 @@ def build_command_mode_fzf(
     # Path is always explicit (defaults to .) and always last
     paths_str = " ".join(paths) if paths else "."
     quoted_pattern = shlex.quote(pattern) if pattern else ""
-    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+
+    # Startup mode depends on whether we have config args:
+    # - Pinned mode (config_args exist): header shows config, query is "rg [opts] pattern paths"
+    # - Inline mode (no config_args): header empty, all opts in query
+    if config_args:
+        # Pinned mode: config in header, user opts + pattern + paths in query
+        full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+        initial_header = config_args
+    else:
+        # Inline mode: everything in query, no header
+        full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+        initial_header = ""
+
     # Add space before path when no pattern, so cursor lands between "rg " and " ."
-    if not pattern and not paths:
+    if not pattern and not paths and not rg_opts:
         full_command = "rg  ."  # Two spaces: "rg | ." with cursor in middle
 
     # Path prefix matching: last word is always the path
@@ -127,15 +140,49 @@ def build_command_mode_fzf(
         fi;
     """.replace("\n", " ").strip()
 
-    reload_cmd = f"""
-        cmd={{q}};
+    # Mode-aware reload: prepend header opts if in pinned mode (header non-empty)
+    # Uses transform to access $FZF_HEADER, then outputs reload action
+    reload_transform = f"""
+        hdr="$FZF_HEADER";
+        cmd="$FZF_QUERY";
         {glob_expand}
         if [[ "$cmd" =~ ^rg ]]; then
             cmd="${{cmd#rg}}";
-            cmd="rg {config_args} {implicit_opts}$cmd";
+            if [[ -n "$hdr" ]]; then
+                cmd="rg $hdr {implicit_opts}$cmd";
+            else
+                cmd="rg {implicit_opts}$cmd";
+            fi;
         fi;
-        RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+        printf 'reload:RIPGREP_CONFIG_PATH= eval %q 2>/dev/null | {delta}' "$cmd"
     """.replace("\n", " ").strip()
+
+    # For start event, we use direct reload since we know the initial state
+    if config_args:
+        # Pinned mode: prepend config_args
+        start_reload = f"""
+            cmd={{q}};
+            {glob_expand}
+            if [[ "$cmd" =~ ^rg ]]; then
+                cmd="${{cmd#rg}}";
+                cmd="rg {config_args} {implicit_opts}$cmd";
+            fi;
+            RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+        """.replace("\n", " ").strip()
+    else:
+        # Inline mode: no prepending
+        start_reload = f"""
+            cmd={{q}};
+            {glob_expand}
+            if [[ "$cmd" =~ ^rg ]]; then
+                cmd="${{cmd#rg}}";
+                cmd="rg {implicit_opts}$cmd";
+            fi;
+            RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+        """.replace("\n", " ").strip()
+
+    # Toggle between inline and pinned modes using helper script
+    toggle_pinned = "rgi-toggle-pinned"
 
     # Save to history before opening editor (fzf's --history only saves on exit, but rgi persists)
     history_file = str(HISTORY_FILE)
@@ -150,19 +197,21 @@ def build_command_mode_fzf(
         full_command,
         "--phony",
         "--header",
-        config_args if config_args else "",
+        initial_header,
         "--preview",
         "[[ -n {1} ]] && rgi-preview {1} {2}",
         "--history",
         str(HISTORY_FILE),
         "--bind",
-        f"start:reload:{reload_cmd}",
+        f"start:reload:{start_reload}",
         # When using default path '.', position cursor before it so user can type pattern
         # Use result event (fires after filtering) and unbind to run only once
         "--bind",
-        "result:backward-char+backward-char+unbind(result)" if not paths else "result:ignore",
+        "result:backward-char+backward-char+unbind(result)"
+        if not pattern and not paths and not rg_opts
+        else "result:ignore",
         "--bind",
-        f"change:reload:{reload_cmd}",
+        f"change:transform:{reload_transform}",
         "--bind",
         f"enter:execute:{enter_execute}",
         "--bind",
@@ -173,6 +222,9 @@ def build_command_mode_fzf(
         "ctrl-p:up",
         "--bind",
         "ctrl-n:down",
+        # Toggle between inline (all opts in query) and pinned (opts in header) modes
+        "--bind",
+        f"alt-/:transform:{toggle_pinned}",
     ]
 
     return cmd
