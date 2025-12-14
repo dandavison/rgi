@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import atexit
 import os
 import shlex
 import subprocess
@@ -20,9 +21,20 @@ def main() -> None:
     implicit_opts = "--json"
     delta = "delta --grep-output-type classic"
 
-    fzf_cmd = build_command_mode_fzf(pattern, paths, rg_opts, config_args, delta, implicit_opts)
+    # Create state file for toggle feature
+    # State tracks: mode (pinned/inline) and pinned options
+    state_file = Path(f"/tmp/rgi-pinned-{os.getpid()}.state")
+    initial_mode = "pinned" if config_args else "inline"
+    state_file.write_text(f"{initial_mode}|{config_args}")
+    os.environ["RGI_STATE_FILE"] = str(state_file)
 
-    fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_cmd)
+    # Clean up state file on exit
+    atexit.register(lambda: state_file.unlink(missing_ok=True))
+
+    fzf_cmd_str = " ".join(
+        shlex.quote(arg)
+        for arg in build_fzf_command(pattern, paths, rg_opts, config_args, delta, implicit_opts)
+    )
     sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True, executable="/bin/bash"))
 
 
@@ -73,6 +85,9 @@ def parse_ripgrep_config(config_path: str) -> str:
 def fzf_base() -> list[str]:
     return [
         "fzf",
+        # Force bash for reload commands - zsh doesn't support all bash features we use
+        "--with-shell",
+        "bash -c",
         "--height",
         "100%",
         "--layout",
@@ -93,7 +108,7 @@ def fzf_base() -> list[str]:
     ]
 
 
-def build_command_mode_fzf(
+def build_fzf_command(
     pattern: str,
     paths: list[str],
     rg_opts: str,
@@ -105,14 +120,31 @@ def build_command_mode_fzf(
     # Path is always explicit (defaults to .) and always last
     paths_str = " ".join(paths) if paths else "."
     quoted_pattern = shlex.quote(pattern) if pattern else ""
-    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+
+    # Startup mode depends on whether we have config args:
+    # - Pinned mode (config_args exist): header shows config, query is "rg [opts] pattern paths"
+    # - Inline mode (no config_args): header empty, all opts in query
+    if config_args:
+        # Pinned mode: config in header, user opts + pattern + paths in query
+        full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+        initial_header = config_args
+    else:
+        # Inline mode: everything in query, no header
+        full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+        initial_header = ""
+
     # Add space before path when no pattern, so cursor lands between "rg " and " ."
-    if not pattern and not paths:
+    if not pattern and not paths and not rg_opts:
         full_command = "rg  ."  # Two spaces: "rg | ." with cursor in middle
 
     # Path prefix matching: last word is always the path
     # Expand with glob if it doesn't exist as-is
     # Trailing space disables expansion (escape hatch for literal paths)
+    # IMPORTANT: Filter matches against exclusion patterns from BOTH pinned_opts AND cmd
+    # because rg's -g exclusions only apply to discovered files, not explicit paths
+    # In pinned mode: exclusions are in pinned_opts (header)
+    # In inline mode: exclusions are in cmd itself (query line)
+    # NOTE: No bash comments in this string - it becomes a one-liner where # breaks things
     glob_expand = """
         if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
             last="${cmd##* }";
@@ -121,21 +153,86 @@ def build_command_mode_fzf(
                 matches=( ${last}* );
                 shopt -u nullglob;
                 if [[ ${#matches[@]} -gt 0 ]]; then
-                    cmd="${cmd% *} ${matches[*]}";
+                    all_opts="$pinned_opts $cmd";
+                    if echo "$all_opts" | grep -qE "'![^']*'"; then
+                        filtered=();
+                        for m in "${matches[@]}"; do
+                            excluded=false;
+                            while IFS= read -r pattern; do
+                                if [[ -n "$pattern" && "$(basename "$m")" == $pattern ]]; then
+                                    excluded=true;
+                                    break;
+                                fi;
+                            done < <(echo "$all_opts" | grep -oE "'![^']*'" | sed "s/^'!//;s/'$//");
+                            if [[ "$excluded" == false ]]; then
+                                filtered+=("$m");
+                            fi;
+                        done;
+                        matches=("${filtered[@]}");
+                    fi;
+                    if [[ ${#matches[@]} -gt 0 ]]; then
+                        cmd="${cmd% *} ${matches[*]}";
+                    fi;
                 fi;
             fi;
         fi;
     """.replace("\n", " ").strip()
 
-    reload_cmd = f"""
-        cmd={{q}};
+    # Mode-aware reload: prepend pinned opts if in pinned mode
+    # Reads state from RGI_STATE_FILE since $FZF_HEADER isn't available in transform
+    reload_transform = f"""
+        state_file="$RGI_STATE_FILE";
+        pinned_opts="";
+        if [[ -f "$state_file" ]]; then
+            state=$(cat "$state_file");
+            mode="${{state%%|*}}";
+            if [[ "$mode" == "pinned" ]]; then
+                pinned_opts="${{state#*|}}";
+            fi;
+        fi;
+        cmd="$FZF_QUERY";
         {glob_expand}
         if [[ "$cmd" =~ ^rg ]]; then
             cmd="${{cmd#rg}}";
-            cmd="rg {config_args} {implicit_opts}$cmd";
+            if [[ -n "$pinned_opts" ]]; then
+                cmd="rg $pinned_opts {implicit_opts}$cmd";
+            else
+                cmd="rg {implicit_opts}$cmd";
+            fi;
         fi;
-        RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+        printf 'reload:RIPGREP_CONFIG_PATH= eval %q 2>/dev/null | {delta}' "$cmd"
     """.replace("\n", " ").strip()
+
+    # For start event, we use direct reload since we know the initial state
+    if config_args:
+        # Pinned mode: prepend config_args
+        # Define pinned_opts so glob_expand can filter against exclusion patterns
+        start_reload = f"""
+            pinned_opts="{config_args}";
+            cmd={{q}};
+            {glob_expand}
+            if [[ "$cmd" =~ ^rg ]]; then
+                cmd="${{cmd#rg}}";
+                cmd="rg {config_args} {implicit_opts}$cmd";
+            fi;
+            RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+        """.replace("\n", " ").strip()
+    else:
+        # Inline mode: no prepending
+        # No pinned_opts, so glob_expand won't filter
+        start_reload = f"""
+            pinned_opts="";
+            cmd={{q}};
+            {glob_expand}
+            if [[ "$cmd" =~ ^rg ]]; then
+                cmd="${{cmd#rg}}";
+                cmd="rg {implicit_opts}$cmd";
+            fi;
+            RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+        """.replace("\n", " ").strip()
+
+    # Toggle between inline and pinned modes using helper script
+    toggle_pinned = "rgi-toggle-pinned"
 
     # Save to history before opening editor (fzf's --history only saves on exit, but rgi persists)
     history_file = str(HISTORY_FILE)
@@ -150,19 +247,21 @@ def build_command_mode_fzf(
         full_command,
         "--phony",
         "--header",
-        config_args if config_args else "",
+        initial_header,
         "--preview",
         "[[ -n {1} ]] && rgi-preview {1} {2}",
         "--history",
         str(HISTORY_FILE),
         "--bind",
-        f"start:reload:{reload_cmd}",
+        f"start:reload:{start_reload}",
         # When using default path '.', position cursor before it so user can type pattern
         # Use result event (fires after filtering) and unbind to run only once
         "--bind",
-        "result:backward-char+backward-char+unbind(result)" if not paths else "result:ignore",
+        "result:backward-char+backward-char+unbind(result)"
+        if not pattern and not paths and not rg_opts
+        else "result:ignore",
         "--bind",
-        f"change:reload:{reload_cmd}",
+        f"change:transform:{reload_transform}",
         "--bind",
         f"enter:execute:{enter_execute}",
         "--bind",
@@ -173,6 +272,9 @@ def build_command_mode_fzf(
         "ctrl-p:up",
         "--bind",
         "ctrl-n:down",
+        # Toggle between inline (all opts in query) and pinned (opts in header) modes
+        "--bind",
+        f"ctrl-]:transform:{toggle_pinned}",
     ]
 
     return cmd

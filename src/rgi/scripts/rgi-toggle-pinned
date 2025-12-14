@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""
+Toggle between inline and pinned modes for rgi.
+
+In pinned mode: options are shown in fzf header and applied implicitly.
+In inline mode: all options are in the query line, header is empty.
+
+Since fzf doesn't export $FZF_HEADER to transform commands, we use a state
+file to track the pinned options and current mode.
+
+State file: /tmp/rgi-pinned-{pid}.state (pid passed via RGI_STATE_FILE env var)
+Format: mode|pinned_options
+  - mode: "pinned" or "inline"
+  - pinned_options: the options to pin (when in pinned mode, shown in header)
+
+Outputs fzf actions to perform the toggle:
+- change-header:NEW_HEADER
+- change-query:NEW_QUERY
+"""
+
+from __future__ import annotations
+
+import os
+import shlex
+from pathlib import Path
+from typing import List, Tuple
+
+# Options that take a value argument
+VALUE_OPTIONS = {
+    "-g",
+    "--glob",
+    "-t",
+    "--type",
+    "-e",
+    "--regexp",
+    "-f",
+    "--file",
+    "-A",
+    "--after-context",
+    "-B",
+    "--before-context",
+    "-C",
+    "--context",
+    "-m",
+    "--max-count",
+    "-M",
+    "--max-columns",
+    "--max-depth",
+    "--type-add",
+    "--type-clear",
+    "--ignore-file",
+    "--path-separator",
+    "-r",
+    "--replace",
+    "--field-match-separator",
+}
+
+
+def get_state_file() -> Path:
+    """Get the state file path from environment."""
+    state_file = os.environ.get("RGI_STATE_FILE", "")
+    if state_file:
+        return Path(state_file)
+    # Fallback: use parent PID
+    return Path(f"/tmp/rgi-pinned-{os.getppid()}.state")
+
+
+def read_state() -> Tuple[str, str]:
+    """Read current mode and pinned options from state file.
+
+    Returns:
+        Tuple of (mode, pinned_options) where mode is "pinned" or "inline"
+    """
+    state_file = get_state_file()
+    if state_file.exists():
+        try:
+            content = state_file.read_text().strip()
+            if "|" in content:
+                mode, pinned_opts = content.split("|", 1)
+                return mode, pinned_opts
+        except Exception:
+            pass
+    return "inline", ""
+
+
+def write_state(mode: str, pinned_opts: str) -> None:
+    """Write current mode and pinned options to state file."""
+    state_file = get_state_file()
+    state_file.write_text(f"{mode}|{pinned_opts}")
+
+
+def parse_options_and_rest(cmd: str) -> Tuple[str, str, str]:
+    """Parse an rg command to extract options, pattern, and paths.
+
+    Args:
+        cmd: Command string starting with 'rg ' or just the args after 'rg'
+
+    Returns:
+        Tuple of (options_str, pattern, paths_str)
+    """
+    # Remove 'rg ' prefix if present
+    if cmd.startswith("rg "):
+        cmd = cmd[3:]
+    elif cmd.startswith("rg"):
+        cmd = cmd[2:]
+
+    cmd = cmd.strip()
+    if not cmd:
+        return "", "", "."
+
+    # Parse into tokens, preserving quotes
+    try:
+        tokens = shlex.split(cmd)
+    except ValueError:
+        # Malformed quotes - do simple split
+        tokens = cmd.split()
+
+    options: List[str] = []
+    pattern = ""
+    paths: List[str] = []
+
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+
+        if token.startswith("-"):
+            # It's an option
+            options.append(shlex.quote(token) if " " in token else token)
+
+            # Check if this option takes a value
+            # Handle --opt=value style
+            if "=" in token:
+                i += 1
+                continue
+
+            # Check if next token is the value (not starting with -)
+            base_opt = token.split("=")[0]
+            if base_opt in VALUE_OPTIONS and i + 1 < len(tokens):
+                val = tokens[i + 1]
+                # Quote the value if it contains special chars
+                if any(c in val for c in " '\"*?[]{}"):
+                    options.append(shlex.quote(val))
+                else:
+                    options.append(val)
+                i += 1
+            i += 1
+        elif not pattern:
+            # First non-option is the pattern
+            pattern = token
+            i += 1
+        else:
+            # Rest are paths
+            paths.append(token)
+            i += 1
+
+    options_str = " ".join(options)
+    paths_str = " ".join(paths) if paths else "."
+
+    return options_str, pattern, paths_str
+
+
+def inject_to_inline(pinned_opts: str, query: str) -> Tuple[str, str]:
+    """Inject pinned options into query (pinned -> inline).
+
+    Args:
+        pinned_opts: The pinned options to inject
+        query: Current query (should be 'rg [pattern] [paths]')
+
+    Returns:
+        Tuple of (new_header, new_query)
+    """
+    # Remove 'rg ' prefix from query
+    if query.startswith("rg "):
+        rest = query[3:].strip()
+    elif query.startswith("rg"):
+        rest = query[2:].strip()
+    else:
+        rest = query.strip()
+
+    # Insert pinned options after 'rg '
+    if pinned_opts.strip():
+        new_query = f"rg {pinned_opts.strip()} {rest}".strip()
+    else:
+        new_query = f"rg {rest}".strip()
+
+    # Clean up multiple spaces
+    new_query = " ".join(new_query.split())
+
+    return "", new_query
+
+
+def eject_to_pinned(query: str) -> Tuple[str, str]:
+    """Extract options from query to header (inline -> pinned).
+
+    Args:
+        query: Current query with all options inline
+
+    Returns:
+        Tuple of (new_header, new_query)
+    """
+    options_str, pattern, paths_str = parse_options_and_rest(query)
+
+    # Build new query without options
+    if pattern:
+        new_query = f"rg {shlex.quote(pattern) if needs_quoting(pattern) else pattern} {paths_str}"
+    else:
+        new_query = f"rg  {paths_str}"  # Two spaces for cursor positioning
+
+    # Clean up
+    new_query = " ".join(new_query.split())
+    if not pattern:
+        # Restore the double space for cursor positioning
+        new_query = new_query.replace("rg ", "rg  ", 1)
+
+    return options_str, new_query
+
+
+def needs_quoting(s: str) -> bool:
+    """Check if a string needs shell quoting."""
+    return any(c in s for c in " '\"*?[]{}|&;<>()$`\\!")
+
+
+def main() -> None:
+    # Read current state from state file
+    mode, pinned_opts = read_state()
+
+    # Read current query from fzf
+    query = os.environ.get("FZF_QUERY", "")
+
+    if mode == "pinned":
+        # Currently in pinned mode -> switch to inline
+        # Inject the stored pinned options into query
+        new_header, new_query = inject_to_inline(pinned_opts, query)
+        new_mode = "inline"
+        # Keep the same pinned_opts in case user wants to toggle back
+    else:
+        # Currently in inline mode -> switch to pinned
+        # Extract options from query to become the new pinned options
+        new_header, new_query = eject_to_pinned(query)
+        new_mode = "pinned"
+        pinned_opts = new_header  # Update pinned options
+
+    # Save new state
+    write_state(new_mode, pinned_opts)
+
+    # Output fzf actions using parenthesis syntax to avoid parsing ambiguity
+    # The colon syntax `change-header:X+change-query:Y` gets misparsed because
+    # fzf treats everything after the first `:` until end-of-string as the value
+    # Using parenthesis syntax: `change-header(X)+change-query(Y)` is unambiguous
+    actions = []
+
+    # Change header (empty parens clears it)
+    if new_header:
+        actions.append(f"change-header({new_header})")
+    else:
+        actions.append("change-header()")
+
+    # Change query - this will trigger the 'change' event which runs the reload transform
+    actions.append(f"change-query({new_query})")
+
+    # Print the actions separated by +
+    print("+".join(actions))
+
+
+if __name__ == "__main__":
+    main()
