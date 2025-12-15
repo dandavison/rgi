@@ -28,10 +28,8 @@ def main() -> None:
     state_file.write_text(f"{initial_mode}|{config_args}")
     os.environ["RGI_STATE_FILE"] = str(state_file)
 
-    # Clean up state files on exit
-    tab_state_file = Path(f"{state_file}.tab")
+    # Clean up state file on exit
     atexit.register(lambda: state_file.unlink(missing_ok=True))
-    atexit.register(lambda: tab_state_file.unlink(missing_ok=True))
 
     fzf_cmd_str = " ".join(
         shlex.quote(arg)
@@ -204,7 +202,6 @@ def build_fzf_command(
                 cmd="rg {implicit_opts}$cmd";
             fi;
         fi;
-        rm -f "$RGI_STATE_FILE.tab";
         printf 'reload:RIPGREP_CONFIG_PATH= eval %q 2>/dev/null | {delta}' "$cmd";
         printf '+change-footer()'
     """.replace("\n", " ").strip()
@@ -242,57 +239,25 @@ def build_fzf_command(
 
     # Tab completion for paths (like shell readline/zle)
     # - Single match: complete fully, add / for directories
-    # - Multiple matches: complete to common prefix, show candidates in footer
-    # - Repeated Tab: cycle through candidates
-    # State file tracks: base_prefix|current_index|candidate1|candidate2|...
+    # - Multiple matches: show candidates in footer (no completion - user must type more)
+    # - No matches: no change
+    # NOTE: Uses change-footer:... (colon syntax) to avoid parsing issues with special chars in paths
     tab_complete = """
         q="$FZF_QUERY";
         last="${q##* }";
-        state="${RGI_STATE_FILE}.tab";
-        [[ "$last" == -* || -z "$last" ]] && { echo "change-query($q)"; exit; };
-        cycling=false;
-        if [[ -f "$state" ]]; then
-            IFS='|' read -r base idx < "$state";
-            mapfile -t stored < <(tail -n +2 "$state");
-            for i in "${!stored[@]}"; do
-                c="${stored[$i]}"; [[ -d "$c" ]] && c="$c/";
-                if [[ "$last" == "$c" || "$last" == "${stored[$i]}" ]]; then
-                    cycling=true; matches=("${stored[@]}");
-                    idx=$(( (i + 1) % ${#matches[@]} ));
-                    break;
-                fi;
-            done;
-        fi;
-        if [[ "$cycling" == false ]]; then
-            IFS=$'\\n' read -d '' -ra matches < <(compgen -f -- "$last" 2>/dev/null; printf '\\0');
-            idx=0;
-        fi;
+        [[ "$last" == -* || -z "$last" ]] && exit;
+        IFS=$'\\n' read -d '' -ra matches < <(compgen -f -- "$last" 2>/dev/null; printf '\\0');
         if [[ ${#matches[@]} -eq 0 ]]; then
-            rm -f "$state"; echo "change-query($q)+change-footer()";
+            exit;
         elif [[ ${#matches[@]} -eq 1 ]]; then
-            rm -f "$state"; m="${matches[0]}"; [[ -d "$m" ]] && m="$m/";
-            echo "change-query(${q% *} $m)+change-footer()";
+            m="${matches[0]}"; [[ -d "$m" ]] && m="$m/";
+            echo "change-query|${q% *} $m|+change-footer()";
         else
-            if [[ "$cycling" == true ]]; then
-                m="${matches[$idx]}"; [[ -d "$m" ]] && m="$m/";
-                { echo "$base|$idx"; printf '%s\\n' "${matches[@]}"; } > "$state";
-            else
-                pfx="${matches[0]}";
-                for m in "${matches[@]}"; do
-                    while [[ "${m:0:${#pfx}}" != "$pfx" && -n "$pfx" ]]; do pfx="${pfx:0:-1}"; done;
-                done;
-                { echo "$last|0"; printf '%s\\n' "${matches[@]}"; } > "$state";
-                if [[ "$pfx" != "$last" ]]; then
-                    m="$pfx"; [[ -d "$m" ]] && m="$m/";
-                else
-                    m="${matches[0]}"; [[ -d "$m" ]] && m="$m/"; idx=0;
-                fi;
-            fi;
-            footer=""; for f in "${matches[@]}"; do
-                [[ -d "$f" ]] && f="$f/";
-                [[ "$f" == "$m" ]] && footer+="[$f] " || footer+="$f ";
+            footer=""; count=0; for f in "${matches[@]}"; do
+                [[ -d "$f" ]] && f="$f/"; footer+="$f  ";
+                ((count++)); [[ $count -ge 20 ]] && { footer+="..."; break; };
             done;
-            echo "change-query(${q% *} $m)+change-footer(${footer% })";
+            echo "change-footer:${footer%  }";
         fi
     """.replace("\n", " ").strip()
 
