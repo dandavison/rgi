@@ -302,7 +302,7 @@ def build_fzf_command(
         "ctrl-n:down",
         # Toggle between inline (all opts in query) and pinned (opts in footer) modes
         "--bind",
-        f"ctrl-]:transform:{toggle_pinned}",
+        rf"ctrl-\:transform:{toggle_pinned}",
         # Tab completion for paths (like shell readline)
         "--bind",
         f"tab:transform-query:{tab_complete}",
