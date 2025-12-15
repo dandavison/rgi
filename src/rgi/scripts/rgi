@@ -97,6 +97,8 @@ def fzf_base() -> list[str]:
         "--prompt",
         " ",
         "--ansi",
+        # Make word movements respect path separators (like shell line editors)
+        "--filepath-word",
         "--bind",
         "ctrl-k:kill-line",
         "--bind",
