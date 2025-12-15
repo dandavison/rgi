@@ -85,6 +85,9 @@ def parse_ripgrep_config(config_path: str) -> str:
 def fzf_base() -> list[str]:
     return [
         "fzf",
+        # Force bash for reload commands - zsh doesn't support all bash features we use
+        "--with-shell",
+        "bash -c",
         "--height",
         "100%",
         "--layout",
@@ -137,6 +140,11 @@ def build_fzf_command(
     # Path prefix matching: last word is always the path
     # Expand with glob if it doesn't exist as-is
     # Trailing space disables expansion (escape hatch for literal paths)
+    # IMPORTANT: Filter matches against exclusion patterns from BOTH pinned_opts AND cmd
+    # because rg's -g exclusions only apply to discovered files, not explicit paths
+    # In pinned mode: exclusions are in pinned_opts (header)
+    # In inline mode: exclusions are in cmd itself (query line)
+    # NOTE: No bash comments in this string - it becomes a one-liner where # breaks things
     glob_expand = """
         if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
             last="${cmd##* }";
@@ -145,7 +153,26 @@ def build_fzf_command(
                 matches=( ${last}* );
                 shopt -u nullglob;
                 if [[ ${#matches[@]} -gt 0 ]]; then
-                    cmd="${cmd% *} ${matches[*]}";
+                    all_opts="$pinned_opts $cmd";
+                    if echo "$all_opts" | grep -qE "'![^']*'"; then
+                        filtered=();
+                        for m in "${matches[@]}"; do
+                            excluded=false;
+                            while IFS= read -r pattern; do
+                                if [[ -n "$pattern" && "$(basename "$m")" == $pattern ]]; then
+                                    excluded=true;
+                                    break;
+                                fi;
+                            done < <(echo "$all_opts" | grep -oE "'![^']*'" | sed "s/^'!//;s/'$//");
+                            if [[ "$excluded" == false ]]; then
+                                filtered+=("$m");
+                            fi;
+                        done;
+                        matches=("${filtered[@]}");
+                    fi;
+                    if [[ ${#matches[@]} -gt 0 ]]; then
+                        cmd="${cmd% *} ${matches[*]}";
+                    fi;
                 fi;
             fi;
         fi;
@@ -179,7 +206,9 @@ def build_fzf_command(
     # For start event, we use direct reload since we know the initial state
     if config_args:
         # Pinned mode: prepend config_args
+        # Define pinned_opts so glob_expand can filter against exclusion patterns
         start_reload = f"""
+            pinned_opts="{config_args}";
             cmd={{q}};
             {glob_expand}
             if [[ "$cmd" =~ ^rg ]]; then
@@ -190,7 +219,9 @@ def build_fzf_command(
         """.replace("\n", " ").strip()
     else:
         # Inline mode: no prepending
+        # No pinned_opts, so glob_expand won't filter
         start_reload = f"""
+            pinned_opts="";
             cmd={{q}};
             {glob_expand}
             if [[ "$cmd" =~ ^rg ]]; then
