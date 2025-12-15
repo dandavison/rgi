@@ -245,7 +245,7 @@ def build_fzf_command(
         "-d:",
         "--query",
         full_command,
-        "--phony",
+        "--disabled",
         "--header",
         initial_header,
         "--preview",
