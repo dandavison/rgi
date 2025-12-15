@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import atexit
 import os
 import shlex
 import subprocess
@@ -19,6 +20,16 @@ def main() -> None:
 
     implicit_opts = "--json"
     delta = "delta --grep-output-type classic"
+
+    # Create state file for toggle feature
+    # State tracks: mode (pinned/inline) and pinned options
+    state_file = Path(f"/tmp/rgi-pinned-{os.getpid()}.state")
+    initial_mode = "pinned" if config_args else "inline"
+    state_file.write_text(f"{initial_mode}|{config_args}")
+    os.environ["RGI_STATE_FILE"] = str(state_file)
+
+    # Clean up state file on exit
+    atexit.register(lambda: state_file.unlink(missing_ok=True))
 
     fzf_cmd_str = " ".join(
         shlex.quote(arg)
@@ -140,16 +151,24 @@ def build_fzf_command(
         fi;
     """.replace("\n", " ").strip()
 
-    # Mode-aware reload: prepend header opts if in pinned mode (header non-empty)
-    # Uses transform to access $FZF_HEADER, then outputs reload action
+    # Mode-aware reload: prepend pinned opts if in pinned mode
+    # Reads state from RGI_STATE_FILE since $FZF_HEADER isn't available in transform
     reload_transform = f"""
-        hdr="$FZF_HEADER";
+        state_file="$RGI_STATE_FILE";
+        pinned_opts="";
+        if [[ -f "$state_file" ]]; then
+            state=$(cat "$state_file");
+            mode="${{state%%|*}}";
+            if [[ "$mode" == "pinned" ]]; then
+                pinned_opts="${{state#*|}}";
+            fi;
+        fi;
         cmd="$FZF_QUERY";
         {glob_expand}
         if [[ "$cmd" =~ ^rg ]]; then
             cmd="${{cmd#rg}}";
-            if [[ -n "$hdr" ]]; then
-                cmd="rg $hdr {implicit_opts}$cmd";
+            if [[ -n "$pinned_opts" ]]; then
+                cmd="rg $pinned_opts {implicit_opts}$cmd";
             else
                 cmd="rg {implicit_opts}$cmd";
             fi;
@@ -224,7 +243,7 @@ def build_fzf_command(
         "ctrl-n:down",
         # Toggle between inline (all opts in query) and pinned (opts in header) modes
         "--bind",
-        f"alt-/:transform:{toggle_pinned}",
+        f"ctrl-]:transform:{toggle_pinned}",
     ]
 
     return cmd
