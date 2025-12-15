@@ -180,7 +180,9 @@ def build_fzf_command(
 
     # Mode-aware reload: prepend pinned opts if in pinned mode
     # Reads state from RGI_STATE_FILE since $FZF_HEADER isn't available in transform
+    # Debounce with sleep 0.1 to reduce intermediate ripgrep processes while typing
     reload_transform = f"""
+        sleep 0.01;
         state_file="$RGI_STATE_FILE";
         pinned_opts="";
         if [[ -f "$state_file" ]]; then
