@@ -236,6 +236,32 @@ def build_fzf_command(
     # Toggle between inline and pinned modes using helper script
     toggle_pinned = "rgi-toggle-pinned"
 
+    # Tab completion for paths (like shell readline/zle)
+    # - Single match: complete fully, add / for directories
+    # - Multiple matches: complete to longest common prefix
+    # - No matches or option flag: no change
+    tab_complete = """
+        q="$FZF_QUERY";
+        last="${q##* }";
+        [[ "$last" == -* || -z "$last" ]] && { echo "$q"; exit; };
+        IFS=$'\\n' read -d '' -ra matches < <(compgen -f -- "$last" 2>/dev/null; printf '\\0');
+        if [[ ${#matches[@]} -eq 1 ]]; then
+            m="${matches[0]}";
+            [[ -d "$m" ]] && m="$m/";
+            echo "${q% *} $m";
+        elif [[ ${#matches[@]} -gt 1 ]]; then
+            pfx="${matches[0]}";
+            for m in "${matches[@]}"; do
+                while [[ "${m:0:${#pfx}}" != "$pfx" && -n "$pfx" ]]; do
+                    pfx="${pfx:0:-1}";
+                done;
+            done;
+            [[ "$pfx" != "$last" ]] && echo "${q% *} $pfx" || echo "$q";
+        else
+            echo "$q";
+        fi
+    """.replace("\n", " ").strip()
+
     # Save to history before opening editor (fzf's --history only saves on exit, but rgi persists)
     history_file = str(HISTORY_FILE)
     save_history = (
@@ -277,6 +303,9 @@ def build_fzf_command(
         # Toggle between inline (all opts in query) and pinned (opts in header) modes
         "--bind",
         f"ctrl-]:transform:{toggle_pinned}",
+        # Tab completion for paths (like shell readline)
+        "--bind",
+        f"tab:transform-query:{tab_complete}",
     ]
 
     return cmd
