@@ -122,16 +122,16 @@ def build_fzf_command(
     quoted_pattern = shlex.quote(pattern) if pattern else ""
 
     # Startup mode depends on whether we have config args:
-    # - Pinned mode (config_args exist): header shows config, query is "rg [opts] pattern paths"
-    # - Inline mode (no config_args): header empty, all opts in query
+    # - Pinned mode (config_args exist): footer shows config, query is "rg [opts] pattern paths"
+    # - Inline mode (no config_args): footer empty, all opts in query
     if config_args:
-        # Pinned mode: config in header, user opts + pattern + paths in query
+        # Pinned mode: config in footer, user opts + pattern + paths in query
         full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
-        initial_header = config_args
+        initial_footer = config_args
     else:
-        # Inline mode: everything in query, no header
+        # Inline mode: everything in query, no footer
         full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
-        initial_header = ""
+        initial_footer = ""
 
     # Add space before path when no pattern, so cursor lands between "rg " and " ."
     if not pattern and not paths and not rg_opts:
@@ -274,8 +274,8 @@ def build_fzf_command(
         "--query",
         full_command,
         "--disabled",
-        "--header",
-        initial_header,
+        "--footer",
+        initial_footer,
         "--preview",
         "[[ -n {1} ]] && rgi-preview {1} {2}",
         "--history",
@@ -300,7 +300,7 @@ def build_fzf_command(
         "ctrl-p:up",
         "--bind",
         "ctrl-n:down",
-        # Toggle between inline (all opts in query) and pinned (opts in header) modes
+        # Toggle between inline (all opts in query) and pinned (opts in footer) modes
         "--bind",
         f"ctrl-]:transform:{toggle_pinned}",
         # Tab completion for paths (like shell readline)

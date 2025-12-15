@@ -2,19 +2,19 @@
 """
 Toggle between inline and pinned modes for rgi.
 
-In pinned mode: options are shown in fzf header and applied implicitly.
-In inline mode: all options are in the query line, header is empty.
+In pinned mode: options are shown in fzf footer and applied implicitly.
+In inline mode: all options are in the query line, footer is empty.
 
-Since fzf doesn't export $FZF_HEADER to transform commands, we use a state
+Since fzf doesn't export $FZF_FOOTER to transform commands, we use a state
 file to track the pinned options and current mode.
 
 State file: /tmp/rgi-pinned-{pid}.state (pid passed via RGI_STATE_FILE env var)
 Format: mode|pinned_options
   - mode: "pinned" or "inline"
-  - pinned_options: the options to pin (when in pinned mode, shown in header)
+  - pinned_options: the options to pin (when in pinned mode, shown in footer)
 
 Outputs fzf actions to perform the toggle:
-- change-header:NEW_HEADER
+- change-footer:NEW_FOOTER
 - change-query:NEW_QUERY
 """
 
@@ -167,7 +167,7 @@ def inject_to_inline(pinned_opts: str, query: str) -> Tuple[str, str]:
         query: Current query (should be 'rg [pattern] [paths]')
 
     Returns:
-        Tuple of (new_header, new_query)
+        Tuple of (new_footer, new_query)
     """
     # Remove 'rg ' prefix from query
     if query.startswith("rg "):
@@ -190,13 +190,13 @@ def inject_to_inline(pinned_opts: str, query: str) -> Tuple[str, str]:
 
 
 def eject_to_pinned(query: str) -> Tuple[str, str]:
-    """Extract options from query to header (inline -> pinned).
+    """Extract options from query to footer (inline -> pinned).
 
     Args:
         query: Current query with all options inline
 
     Returns:
-        Tuple of (new_header, new_query)
+        Tuple of (new_footer, new_query)
     """
     options_str, pattern, paths_str = parse_options_and_rest(query)
 
@@ -230,30 +230,30 @@ def main() -> None:
     if mode == "pinned":
         # Currently in pinned mode -> switch to inline
         # Inject the stored pinned options into query
-        new_header, new_query = inject_to_inline(pinned_opts, query)
+        new_footer, new_query = inject_to_inline(pinned_opts, query)
         new_mode = "inline"
         # Keep the same pinned_opts in case user wants to toggle back
     else:
         # Currently in inline mode -> switch to pinned
         # Extract options from query to become the new pinned options
-        new_header, new_query = eject_to_pinned(query)
+        new_footer, new_query = eject_to_pinned(query)
         new_mode = "pinned"
-        pinned_opts = new_header  # Update pinned options
+        pinned_opts = new_footer  # Update pinned options
 
     # Save new state
     write_state(new_mode, pinned_opts)
 
     # Output fzf actions using parenthesis syntax to avoid parsing ambiguity
-    # The colon syntax `change-header:X+change-query:Y` gets misparsed because
+    # The colon syntax `change-footer:X+change-query:Y` gets misparsed because
     # fzf treats everything after the first `:` until end-of-string as the value
-    # Using parenthesis syntax: `change-header(X)+change-query(Y)` is unambiguous
+    # Using parenthesis syntax: `change-footer(X)+change-query(Y)` is unambiguous
     actions = []
 
-    # Change header (empty parens clears it)
-    if new_header:
-        actions.append(f"change-header({new_header})")
+    # Change footer (empty parens clears it)
+    if new_footer:
+        actions.append(f"change-footer({new_footer})")
     else:
-        actions.append("change-header()")
+        actions.append("change-footer()")
 
     # Change query - this will trigger the 'change' event which runs the reload transform
     actions.append(f"change-query({new_query})")
