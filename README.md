@@ -1,37 +1,14 @@
 An interactive UI for ripgrep.
 
-## Installation
-
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/), [ripgrep](https://github.com/BurntSushi/ripgrep), [fzf](https://github.com/junegunn/fzf), [bat](https://github.com/sharkdp/bat), [delta](https://dandavison.github.io/delta/installation.html) (e.g. on macos `brew install uv ripgrep fzf bat git-delta`).
-
-Then:
-
-```
-uv tool install git+https://github.com/dandavison/rgi
-export RGI_EDITOR=vscode  # vscode | cursor | idea | zed | vim | emacs | pycharm | helix | wormhole | /path/to/custom-editor
-```
-
-<br>
-
-**Update to latest version**
-
-```
-uv tool uninstall rgi
-uv tool install git+https://github.com/dandavison/rgi
-```
-
 ## Usage
 
-`rgi`
-
-Then use [ripgrep](https://manpages.ubuntu.com/manpages/jammy/man1/rg.1.html) as usual: search results will update dynamically.
+Enter `rgi`, then use [ripgrep](https://manpages.ubuntu.com/manpages/jammy/man1/rg.1.html) as usual: search results will update dynamically.
 
 
 **Keyboard shortcuts**
 
-
-- **Enter**: Open the line in your editor / IDE
-- **Tab**: Toggle between editing the full `rg` command vs editing just the search regex (experimental/buggy)
+- **`Enter`**: Open the line in your editor / IDE
+- **`Ctrl+\`**: Toggle `rg` options inline for editing vs pinned in footer
 
 <br>
 
@@ -56,12 +33,26 @@ See the environment variables section of `fzf --man`.
 
 **Editor configuration**
 
-Set `RGI_EDITOR` to one of the values with built-in support (`vscode`, `cursor`, `idea`, `zed`, `vim`, `emacs`, `pycharm`, `helix`, `wormhole`).
+Set `RGI_EDITOR` to one of the values with built-in support (`vscode`, `cursor`, `idea`, `zed`, `vim`, `emacs`, `pycharm`, `helix`, `wormhole`). Alternatively set it to the absolute path of an executable that accepts two arguments: an absolute file path, and a line number.
 
-Alternatively you may set it to an absolute file path to a custom executable:
 
-```bash
-export RGI_EDITOR=/path/to/my-custom-editor
+## Installation
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), [ripgrep](https://github.com/BurntSushi/ripgrep), [fzf](https://github.com/junegunn/fzf), [bat](https://github.com/sharkdp/bat), [delta](https://dandavison.github.io/delta/installation.html) (e.g. on macos `brew install uv ripgrep fzf bat git-delta`).
+
+Then:
+
+```
+uv tool install git+https://github.com/dandavison/rgi
+export RGI_EDITOR=vscode  # vscode | cursor | idea | zed | vim | emacs | pycharm | helix | wormhole | /path/to/custom-editor
 ```
 
-The executable must accept two arguments: an absolute file path, and a line number.
+<br>
+
+**Update to latest version**
+
+```
+uv tool uninstall rgi
+uv tool install git+https://github.com/dandavison/rgi
+```
+
