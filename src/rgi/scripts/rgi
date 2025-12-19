@@ -105,7 +105,7 @@ def fzf_base() -> list[str]:
         "alt-left:backward-word",
         "--no-border",
         "--preview-window",
-        "up,70%,~3",
+        "up,70%,~3,noinfo",
     ]
 
 
