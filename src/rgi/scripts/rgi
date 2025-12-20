@@ -18,7 +18,7 @@ def main() -> None:
     ripgrep_config_path = os.environ.get("RIPGREP_CONFIG_PATH", "")
     config_args = parse_ripgrep_config(ripgrep_config_path)
 
-    implicit_opts = "--json --sort=path"
+    implicit_opts = "--json"
     delta = "delta --grep-output-type classic"
 
     # Create state file for toggle feature
