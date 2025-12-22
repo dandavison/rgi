@@ -138,128 +138,30 @@ def build_fzf_command(
     if not pattern and not paths and not rg_opts:
         full_command = "rg "
 
-    # Path prefix matching: last word is always the path
-    # Expand with glob if it doesn't exist as-is
-    # Trailing space disables expansion (escape hatch for literal paths)
-    # IMPORTANT: Filter matches against exclusion patterns from BOTH pinned_opts AND cmd
-    # because rg's -g exclusions only apply to discovered files, not explicit paths
-    # In pinned mode: exclusions are in pinned_opts (header)
-    # In inline mode: exclusions are in cmd itself (query line)
-    # NOTE: No bash comments in this string - it becomes a one-liner where # breaks things
-    glob_expand = """
-        if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
-            last="${cmd##* }";
-            if [[ "$last" != -* && ! -e "$last" && -n "$last" ]]; then
-                shopt -s nullglob;
-                matches=( ${last}* );
-                shopt -u nullglob;
-                if [[ ${#matches[@]} -gt 0 ]]; then
-                    all_opts="$pinned_opts $cmd";
-                    if echo "$all_opts" | grep -qE "'![^']*'"; then
-                        filtered=();
-                        for m in "${matches[@]}"; do
-                            excluded=false;
-                            while IFS= read -r pattern; do
-                                if [[ -n "$pattern" && "$(basename "$m")" == $pattern ]]; then
-                                    excluded=true;
-                                    break;
-                                fi;
-                            done < <(echo "$all_opts" | grep -oE "'![^']*'" | sed "s/^'!//;s/'$//");
-                            if [[ "$excluded" == false ]]; then
-                                filtered+=("$m");
-                            fi;
-                        done;
-                        matches=("${filtered[@]}");
-                    fi;
-                    if [[ ${#matches[@]} -gt 0 ]]; then
-                        cmd="${cmd% *} ${matches[*]}";
-                    fi;
-                fi;
-            fi;
-        fi;
-    """.replace("\n", " ").strip()
+    # Build shell scripts from templates
+    glob_expand = _oneline(GLOB_EXPAND_SCRIPT)
 
-    # Mode-aware reload: prepend pinned opts if in pinned mode
-    # Reads state from RGI_STATE_FILE since $FZF_HEADER isn't available in transform.
-    reload_transform = f"""
-        state_file="$RGI_STATE_FILE";
-        pinned_opts="";
-        if [[ -f "$state_file" ]]; then
-            state=$(cat "$state_file");
-            mode="${{state%%|*}}";
-            if [[ "$mode" == "pinned" ]]; then
-                pinned_opts="${{state#*|}}";
-            fi;
-        fi;
-        cmd="$FZF_QUERY";
-        {glob_expand}
-        if [[ "$cmd" =~ ^rg ]]; then
-            cmd="${{cmd#rg}}";
-            if [[ -n "$pinned_opts" ]]; then
-                cmd="rg $pinned_opts {implicit_opts}$cmd";
-            else
-                cmd="rg {implicit_opts}$cmd";
-            fi;
-        fi;
-        printf 'reload:RIPGREP_CONFIG_PATH= eval %q 2>/dev/null | {delta}' "$cmd"
-    """.replace("\n", " ").strip()
+    reload_transform = _oneline(
+        RELOAD_TRANSFORM_SCRIPT.replace("__GLOB_EXPAND__", glob_expand)
+        .replace("__IMPLICIT_OPTS__", implicit_opts)
+        .replace("__DELTA__", delta)
+    )
 
-    # For start event, we use direct reload since we know the initial state
     if config_args:
-        # Pinned mode: prepend config_args
-        # Define pinned_opts so glob_expand can filter against exclusion patterns
-        start_reload = f"""
-            pinned_opts="{config_args}";
-            cmd={{q}};
-            {glob_expand}
-            if [[ "$cmd" =~ ^rg ]]; then
-                cmd="${{cmd#rg}}";
-                cmd="rg {config_args} {implicit_opts}$cmd";
-            fi;
-            RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
-        """.replace("\n", " ").strip()
+        start_reload = _oneline(
+            START_RELOAD_PINNED_SCRIPT.replace("__CONFIG_ARGS__", config_args)
+            .replace("__GLOB_EXPAND__", glob_expand)
+            .replace("__IMPLICIT_OPTS__", implicit_opts)
+            .replace("__DELTA__", delta)
+        )
     else:
-        # Inline mode: no prepending
-        # No pinned_opts, so glob_expand won't filter
-        start_reload = f"""
-            pinned_opts="";
-            cmd={{q}};
-            {glob_expand}
-            if [[ "$cmd" =~ ^rg ]]; then
-                cmd="${{cmd#rg}}";
-                cmd="rg {implicit_opts}$cmd";
-            fi;
-            RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
-        """.replace("\n", " ").strip()
+        start_reload = _oneline(
+            START_RELOAD_INLINE_SCRIPT.replace("__GLOB_EXPAND__", glob_expand)
+            .replace("__IMPLICIT_OPTS__", implicit_opts)
+            .replace("__DELTA__", delta)
+        )
 
-    # Toggle between inline and pinned modes using helper script
-    toggle_pinned = "rgi-toggle-pinned"
-
-    # Tab completion for paths (like shell readline/zle)
-    # - Single match: complete fully, add / for directories
-    # - Multiple matches: complete to longest common prefix
-    # - No matches or option flag: no change
-    tab_complete = """
-        q="$FZF_QUERY";
-        last="${q##* }";
-        [[ "$last" == -* || -z "$last" ]] && { echo "$q"; exit; };
-        IFS=$'\\n' read -d '' -ra matches < <(compgen -f -- "$last" 2>/dev/null; printf '\\0');
-        if [[ ${#matches[@]} -eq 1 ]]; then
-            m="${matches[0]}";
-            [[ -d "$m" ]] && m="$m/";
-            echo "${q% *} $m";
-        elif [[ ${#matches[@]} -gt 1 ]]; then
-            pfx="${matches[0]}";
-            for m in "${matches[@]}"; do
-                while [[ "${m:0:${#pfx}}" != "$pfx" && -n "$pfx" ]]; do
-                    pfx="${pfx:0:-1}";
-                done;
-            done;
-            [[ "$pfx" != "$last" ]] && echo "${q% *} $pfx" || echo "$q";
-        else
-            echo "$q";
-        fi
-    """.replace("\n", " ").strip()
+    tab_complete = _oneline(TAB_COMPLETE_SCRIPT)
 
     # Save to history before opening editor (fzf's --history only saves on exit, but rgi persists)
     history_file = str(HISTORY_FILE)
@@ -283,7 +185,7 @@ def build_fzf_command(
         f"start:reload:{start_reload}",
         # If user hasn't typed anything, add default path and position cursor: "rg | ."
         "--bind",
-        'result:transform:[[ "$FZF_QUERY" == "rg " ]] && echo "change-query(rg  .)+backward-char+backward-char+unbind(result)" || echo "unbind(result)"'
+        f"result:transform:{CURSOR_POSITION_SCRIPT}"
         if not pattern and not paths and not rg_opts
         else "result:ignore",
         "--bind",
@@ -300,7 +202,7 @@ def build_fzf_command(
         "ctrl-n:down",
         # Toggle between inline (all opts in query) and pinned (opts in footer) modes
         "--bind",
-        rf"ctrl-\:transform:{toggle_pinned}",
+        r"ctrl-\:transform:rgi-toggle-pinned",
         # Tab completion for paths (like shell readline)
         "--bind",
         f"tab:transform-query:{tab_complete}",
@@ -308,6 +210,133 @@ def build_fzf_command(
 
     return cmd
 
+
+def _oneline(script: str) -> str:
+    """Convert a multiline shell script to a single line."""
+    return " ".join(script.split())
+
+
+# =============================================================================
+# Shell script templates
+# =============================================================================
+
+# Path prefix glob expansion
+# Expands last word with glob if it doesn't exist as-is
+# Filters matches against exclusion patterns from pinned_opts and cmd
+# NOTE: No bash comments - becomes a one-liner where # breaks things
+GLOB_EXPAND_SCRIPT = """
+    if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
+        last="${cmd##* }";
+        if [[ "$last" != -* && ! -e "$last" && -n "$last" ]]; then
+            shopt -s nullglob;
+            matches=( ${last}* );
+            shopt -u nullglob;
+            if [[ ${#matches[@]} -gt 0 ]]; then
+                all_opts="$pinned_opts $cmd";
+                if echo "$all_opts" | grep -qE "'![^']*'"; then
+                    filtered=();
+                    for m in "${matches[@]}"; do
+                        excluded=false;
+                        while IFS= read -r pattern; do
+                            if [[ -n "$pattern" && "$(basename "$m")" == $pattern ]]; then
+                                excluded=true;
+                                break;
+                            fi;
+                        done < <(echo "$all_opts" | grep -oE "'![^']*'" | sed "s/^'!//;s/'$//");
+                        if [[ "$excluded" == false ]]; then
+                            filtered+=("$m");
+                        fi;
+                    done;
+                    matches=("${filtered[@]}");
+                fi;
+                if [[ ${#matches[@]} -gt 0 ]]; then
+                    cmd="${cmd% *} ${matches[*]}";
+                fi;
+            fi;
+        fi;
+    fi;
+"""
+
+# Mode-aware reload transform
+# Reads state from RGI_STATE_FILE to determine if pinned opts should be prepended
+RELOAD_TRANSFORM_SCRIPT = """
+    state_file="$RGI_STATE_FILE";
+    pinned_opts="";
+    if [[ -f "$state_file" ]]; then
+        state=$(cat "$state_file");
+        mode="${state%%|*}";
+        if [[ "$mode" == "pinned" ]]; then
+            pinned_opts="${state#*|}";
+        fi;
+    fi;
+    cmd="$FZF_QUERY";
+    __GLOB_EXPAND__
+    if [[ "$cmd" =~ ^rg ]]; then
+        cmd="${cmd#rg}";
+        if [[ -n "$pinned_opts" ]]; then
+            cmd="rg $pinned_opts __IMPLICIT_OPTS__$cmd";
+        else
+            cmd="rg __IMPLICIT_OPTS__$cmd";
+        fi;
+    fi;
+    printf 'reload:RIPGREP_CONFIG_PATH= eval %q 2>/dev/null | __DELTA__' "$cmd"
+"""
+
+# Start reload for pinned mode (config_args prepended)
+START_RELOAD_PINNED_SCRIPT = """
+    pinned_opts="__CONFIG_ARGS__";
+    cmd={q};
+    __GLOB_EXPAND__
+    if [[ "$cmd" =~ ^rg ]]; then
+        cmd="${cmd#rg}";
+        cmd="rg __CONFIG_ARGS__ __IMPLICIT_OPTS__$cmd";
+    fi;
+    RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | __DELTA__
+"""
+
+# Start reload for inline mode (no config_args)
+START_RELOAD_INLINE_SCRIPT = """
+    pinned_opts="";
+    cmd={q};
+    __GLOB_EXPAND__
+    if [[ "$cmd" =~ ^rg ]]; then
+        cmd="${cmd#rg}";
+        cmd="rg __IMPLICIT_OPTS__$cmd";
+    fi;
+    RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | __DELTA__
+"""
+
+# Tab completion for paths
+# Single match: complete fully, add / for directories
+# Multiple matches: complete to longest common prefix
+TAB_COMPLETE_SCRIPT = r"""
+    q="$FZF_QUERY";
+    last="${q##* }";
+    [[ "$last" == -* || -z "$last" ]] && { echo "$q"; exit; };
+    IFS=$'\n' read -d '' -ra matches < <(compgen -f -- "$last" 2>/dev/null; printf '\0');
+    if [[ ${#matches[@]} -eq 1 ]]; then
+        m="${matches[0]}";
+        [[ -d "$m" ]] && m="$m/";
+        echo "${q% *} $m";
+    elif [[ ${#matches[@]} -gt 1 ]]; then
+        pfx="${matches[0]}";
+        for m in "${matches[@]}"; do
+            while [[ "${m:0:${#pfx}}" != "$pfx" && -n "$pfx" ]]; do
+                pfx="${pfx:0:-1}";
+            done;
+        done;
+        [[ "$pfx" != "$last" ]] && echo "${q% *} $pfx" || echo "$q";
+    else
+        echo "$q";
+    fi
+"""
+
+# Cursor positioning on startup (only if user hasn't typed)
+CURSOR_POSITION_SCRIPT = (
+    '[[ "$FZF_QUERY" == "rg " ]] && '
+    'echo "change-query(rg  .)+backward-char+backward-char+unbind(result)" || '
+    'echo "unbind(result)"'
+)
 
 if __name__ == "__main__":
     main()
