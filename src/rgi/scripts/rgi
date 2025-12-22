@@ -134,9 +134,9 @@ def build_fzf_command(
         full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
         initial_footer = ""
 
-    # Add space before path when no pattern, so cursor lands between "rg " and " ."
+    # When no args, start with just "rg " - we'll add default path later if user hasn't typed
     if not pattern and not paths and not rg_opts:
-        full_command = "rg  ."  # Two spaces: "rg | ." with cursor in middle
+        full_command = "rg "
 
     # Path prefix matching: last word is always the path
     # Expand with glob if it doesn't exist as-is
@@ -281,10 +281,9 @@ def build_fzf_command(
         str(HISTORY_FILE),
         "--bind",
         f"start:reload:{start_reload}",
-        # When using default path '.', position cursor before it so user can type pattern
-        # Use result event (fires after filtering) and unbind to run only once
+        # If user hasn't typed anything, add default path and position cursor: "rg | ."
         "--bind",
-        "result:backward-char+backward-char+unbind(result)"
+        'result:transform:[[ "$FZF_QUERY" == "rg " ]] && echo "change-query(rg  .)+backward-char+backward-char+unbind(result)" || echo "unbind(result)"'
         if not pattern and not paths and not rg_opts
         else "result:ignore",
         "--bind",
