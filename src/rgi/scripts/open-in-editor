@@ -74,7 +74,7 @@ case "$editor" in
         fi
         ;;
     wormhole)
-        wormhole "$file":"$line"
+        wormhole file "$file":"$line"
         ;;
     vim)
         vim "+$line" "$file"
