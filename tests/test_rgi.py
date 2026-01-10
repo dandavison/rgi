@@ -1080,9 +1080,9 @@ def test_inline_mode_glob_expand_respects_exclusions(test_fixture_dir, rgi_path)
             f"Expected code.py in pinned mode results, got:\n{pinned_output}"
         )
 
-        # Press ctrl-] to toggle to inline mode
+        # Press ctrl-\ to toggle to inline mode
         subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "C-]"),
+            tmux_cmd(socket, "send-keys", "-t", session_name, "C-\\"),
             check=True,
         )
         time.sleep(1.0)
@@ -1123,7 +1123,7 @@ def test_inline_mode_glob_expand_respects_exclusions(test_fixture_dir, rgi_path)
 
 
 def test_ctrl_bracket_toggles_mode(test_fixture_dir, rgi_path):
-    """Test: ctrl-] toggles between inline and pinned modes."""
+    """Test: ctrl-\\ toggles between inline and pinned modes."""
     import subprocess
 
     # Create a config file
@@ -1174,9 +1174,9 @@ def test_ctrl_bracket_toggles_mode(test_fixture_dir, rgi_path):
             f"Expected '--smart-case' in header initially, got:\n{initial_output}"
         )
 
-        # Press ctrl-] to toggle to inline mode
+        # Press ctrl-\ to toggle to inline mode
         subprocess.run(
-            tmux_cmd(socket, "send-keys", "-t", session_name, "C-]"),
+            tmux_cmd(socket, "send-keys", "-t", session_name, "C-\\"),
             check=True,
         )
         time.sleep(1.0)

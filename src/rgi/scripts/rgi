@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+"""
+rgi - Interactive ripgrep with fzf.
+
+This is the main entry point for rgi. It operates in "command mode" where
+the fzf query line IS the ripgrep command being constructed.
+
+Architecture:
+- Framework layer (rgi.fzf): Generic fzf command building
+- Shell scripts layer (rgi.shell_scripts): Bash script templates
+- Application layer (this file): rgi-specific logic and configuration
+"""
+from __future__ import annotations
+
 import atexit
 import os
 import shlex
@@ -6,39 +19,43 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Add parent directory to path so we can import rgi modules
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from rgi.fzf import FzfCommandBuilder, FzfConfig, base_bindings
+from rgi.shell_scripts import (
+    CURSOR_POSITION,
+    build_reload_transform,
+    build_start_reload_inline,
+    build_start_reload_pinned,
+    build_tab_complete,
+)
+
+# =============================================================================
+# Constants
+# =============================================================================
+
 HISTORY_FILE = Path.home() / ".rgi_history"
+IMPLICIT_OPTS = "--json"
+DELTA_CMD = "delta --grep-output-type classic"
 
 
-def main() -> None:
-    script_dir = str(Path(__file__).resolve().parent)
-    os.environ["PATH"] = f"{script_dir}:{os.environ.get('PATH', '')}"
-
-    pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
-
-    ripgrep_config_path = os.environ.get("RIPGREP_CONFIG_PATH", "")
-    config_args = parse_ripgrep_config(ripgrep_config_path)
-
-    implicit_opts = "--json"
-    delta = "delta --grep-output-type classic"
-
-    # Create state file for toggle feature
-    # State tracks: mode (pinned/inline) and pinned options
-    state_file = Path(f"/tmp/rgi-pinned-{os.getpid()}.state")
-    initial_mode = "pinned" if config_args else "inline"
-    state_file.write_text(f"{initial_mode}|{config_args}")
-    os.environ["RGI_STATE_FILE"] = str(state_file)
-
-    # Clean up state file on exit
-    atexit.register(lambda: state_file.unlink(missing_ok=True))
-
-    fzf_cmd_str = " ".join(
-        shlex.quote(arg)
-        for arg in build_fzf_command(pattern, paths, rg_opts, config_args, delta, implicit_opts)
-    )
-    sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True, executable="/bin/bash"))
+# =============================================================================
+# Argument Parsing (Application Layer)
+# =============================================================================
 
 
 def parse_arguments(argv: list[str]) -> tuple[str, list[str], str]:
+    """Parse command-line arguments into pattern, paths, and rg options.
+
+    The argument format is: rgi [rg-options] [pattern] [paths...]
+
+    Args:
+        argv: Command-line arguments (excluding the program name)
+
+    Returns:
+        Tuple of (pattern, paths, rg_opts_string)
+    """
     pattern = ""
     paths = []
     rg_opts = ""
@@ -49,6 +66,7 @@ def parse_arguments(argv: list[str]) -> tuple[str, list[str], str]:
             opt = argv[i]
             rg_opts += f" {opt}"
             i += 1
+            # Handle options that take a value argument
             if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"] and i < len(argv):
                 rg_opts += f" '{argv[i]}'"
                 i += 1
@@ -66,6 +84,14 @@ def parse_arguments(argv: list[str]) -> tuple[str, list[str], str]:
 
 
 def parse_ripgrep_config(config_path: str) -> str:
+    """Parse ripgrep config file into argument string.
+
+    Args:
+        config_path: Path to the ripgrep config file
+
+    Returns:
+        Space-separated string of config arguments
+    """
     if not config_path or not os.path.isfile(config_path):
         return ""
 
@@ -82,261 +108,156 @@ def parse_ripgrep_config(config_path: str) -> str:
     return config_args.strip()
 
 
-def fzf_base() -> list[str]:
-    return [
-        "fzf",
-        # Force bash for reload commands - zsh doesn't support all bash features we use
-        "--with-shell",
-        "bash -c",
-        "--height",
-        "100%",
-        "--layout",
-        "reverse",
-        "--info",
-        "hidden",
-        "--prompt",
-        " ",
-        "--ansi",
-        "--bind",
-        "ctrl-k:kill-line",
-        "--bind",
-        "alt-right:forward-word",
-        "--bind",
-        "alt-left:backward-word",
-        "--no-border",
-        "--preview-window",
-        "up,70%,~3,noinfo",
-    ]
+# =============================================================================
+# fzf Configuration (Application Layer)
+# =============================================================================
 
 
-def build_fzf_command(
+def build_initial_query(pattern: str, paths: list[str], rg_opts: str) -> str:
+    """Build the initial query string for fzf.
+
+    Args:
+        pattern: Search pattern
+        paths: List of paths to search
+        rg_opts: Ripgrep options string
+
+    Returns:
+        The initial query to display in fzf
+    """
+    paths_str = " ".join(paths) if paths else "."
+    quoted_pattern = shlex.quote(pattern) if pattern else ""
+    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+
+    # When no args, start with just "rg " - we'll add default path later
+    if not pattern and not paths and not rg_opts:
+        full_command = "rg "
+
+    return full_command
+
+
+def create_state_file(initial_mode: str, config_args: str) -> Path:
+    """Create the state file for mode toggling.
+
+    State tracks: mode (pinned/inline) and pinned options.
+    Format: mode|pinned_options
+
+    Args:
+        initial_mode: Either "pinned" or "inline"
+        config_args: The config arguments to store
+
+    Returns:
+        Path to the state file
+    """
+    state_file = Path(f"/tmp/rgi-pinned-{os.getpid()}.state")
+    state_file.write_text(f"{initial_mode}|{config_args}")
+    os.environ["RGI_STATE_FILE"] = str(state_file)
+
+    # Clean up on exit
+    atexit.register(lambda: state_file.unlink(missing_ok=True))
+
+    return state_file
+
+
+def build_rgi_fzf_command(
     pattern: str,
     paths: list[str],
     rg_opts: str,
     config_args: str,
-    delta: str,
-    implicit_opts: str,
 ) -> list[str]:
-    # rgi command format: rg <options+pattern> PATH
-    # Path is always explicit (defaults to .) and always last
-    paths_str = " ".join(paths) if paths else "."
-    quoted_pattern = shlex.quote(pattern) if pattern else ""
+    """Build the complete fzf command for rgi.
 
-    # Startup mode depends on whether we have config args:
-    # - Pinned mode (config_args exist): footer shows config, query is "rg [opts] pattern paths"
-    # - Inline mode (no config_args): footer empty, all opts in query
-    if config_args:
-        # Pinned mode: config in footer, user opts + pattern + paths in query
-        full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
-        initial_footer = config_args
-    else:
-        # Inline mode: everything in query, no footer
-        full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
-        initial_footer = ""
+    This is where the application layer configures the framework layer.
 
-    # When no args, start with just "rg " - we'll add default path later if user hasn't typed
-    if not pattern and not paths and not rg_opts:
-        full_command = "rg "
+    Args:
+        pattern: Search pattern
+        paths: List of paths to search
+        rg_opts: Ripgrep options string
+        config_args: Config arguments from RIPGREP_CONFIG_PATH
 
-    # Build shell scripts from templates
-    glob_expand = _oneline(GLOB_EXPAND_SCRIPT)
+    Returns:
+        List of fzf command arguments
+    """
+    initial_query = build_initial_query(pattern, paths, rg_opts)
+    initial_footer = config_args if config_args else ""
 
-    reload_transform = _oneline(
-        RELOAD_TRANSFORM_SCRIPT.replace("__GLOB_EXPAND__", glob_expand)
-        .replace("__IMPLICIT_OPTS__", implicit_opts)
-        .replace("__DELTA__", delta)
-    )
+    # Build shell scripts
+    reload_transform = build_reload_transform(IMPLICIT_OPTS, DELTA_CMD)
 
     if config_args:
-        start_reload = _oneline(
-            START_RELOAD_PINNED_SCRIPT.replace("__CONFIG_ARGS__", config_args)
-            .replace("__GLOB_EXPAND__", glob_expand)
-            .replace("__IMPLICIT_OPTS__", implicit_opts)
-            .replace("__DELTA__", delta)
-        )
+        start_reload = build_start_reload_pinned(config_args, IMPLICIT_OPTS, DELTA_CMD)
     else:
-        start_reload = _oneline(
-            START_RELOAD_INLINE_SCRIPT.replace("__GLOB_EXPAND__", glob_expand)
-            .replace("__IMPLICIT_OPTS__", implicit_opts)
-            .replace("__DELTA__", delta)
-        )
+        start_reload = build_start_reload_inline(IMPLICIT_OPTS, DELTA_CMD)
 
-    tab_complete = _oneline(TAB_COMPLETE_SCRIPT)
+    tab_complete = build_tab_complete()
 
-    # Save to history before opening editor (fzf's --history only saves on exit, but rgi persists)
+    # History-aware enter action
     history_file = str(HISTORY_FILE)
     save_history = (
         f'[[ "$(tail -1 {history_file} 2>/dev/null)" != {{q}} ]] && echo {{q}} >> {history_file};'
     )
     enter_execute = f"{save_history} open-in-editor {{1}} {{2}}"
 
-    cmd = fzf_base() + [
-        "-d:",
-        "--query",
-        full_command,
-        "--disabled",
-        "--footer",
-        initial_footer,
-        "--preview",
-        "[[ -n {1} ]] && rgi-preview {1} {2}",
-        "--history",
-        str(HISTORY_FILE),
-        "--bind",
-        f"start:reload:{start_reload}",
-        # If user hasn't typed anything, add default path and position cursor: "rg | ."
-        "--bind",
-        f"result:transform:{CURSOR_POSITION_SCRIPT}"
-        if not pattern and not paths and not rg_opts
-        else "result:ignore",
-        "--bind",
-        f"change:transform:{reload_transform}",
-        "--bind",
-        f"enter:execute:{enter_execute}",
-        "--bind",
-        "alt-up:prev-history",
-        "--bind",
-        "alt-down:next-history",
-        "--bind",
-        "ctrl-p:up",
-        "--bind",
-        "ctrl-n:down",
-        # Toggle between inline (all opts in query) and pinned (opts in footer) modes
-        "--bind",
-        r"ctrl-\:transform:rgi-toggle-pinned",
-        # Tab completion for paths (like shell readline)
-        "--bind",
-        f"tab:transform-query:{tab_complete}",
-    ]
+    # Configure fzf
+    config = FzfConfig(
+        disabled=True,
+        delimiter=":",
+        initial_query=initial_query,
+        preview_command="[[ -n {1} ]] && rgi-preview {1} {2}",
+        preview_window="up,70%,~3,noinfo",
+        history_file=str(HISTORY_FILE),
+        footer=initial_footer,
+        bindings=base_bindings(),
+    )
 
-    return cmd
+    # Build command with framework
+    builder = FzfCommandBuilder(config)
 
+    # Add rgi-specific bindings
+    builder.add_binding("start", f"reload:{start_reload}", "Initial load")
 
-def _oneline(script: str) -> str:
-    """Convert a multiline shell script to a single line."""
-    return " ".join(script.split())
+    # Cursor positioning on startup (only when no pattern given)
+    if not pattern and not paths and not rg_opts:
+        builder.add_binding("result", f"transform:{CURSOR_POSITION}", "Position cursor")
+    else:
+        builder.add_binding("result", "ignore", "Skip cursor positioning")
+
+    builder.add_binding("change", f"transform:{reload_transform}", "Reload on change")
+    builder.add_binding("enter", f"execute:{enter_execute}", "Open in editor")
+    builder.add_binding("ctrl-\\", "transform:rgi-toggle-pinned", "Toggle inline/pinned")
+    builder.add_binding("tab", f"transform-query:{tab_complete}", "Tab completion")
+
+    return builder.build_args()
 
 
 # =============================================================================
-# Shell script templates
+# Main Entry Point
 # =============================================================================
 
-# Path prefix glob expansion
-# Expands last word with glob if it doesn't exist as-is
-# Filters matches against exclusion patterns from pinned_opts and cmd
-# NOTE: No bash comments - becomes a one-liner where # breaks things
-GLOB_EXPAND_SCRIPT = """
-    if [[ ! "$cmd" =~ [[:space:]]$ ]]; then
-        last="${cmd##* }";
-        if [[ "$last" != -* && ! -e "$last" && -n "$last" ]]; then
-            shopt -s nullglob;
-            matches=( ${last}* );
-            shopt -u nullglob;
-            if [[ ${#matches[@]} -gt 0 ]]; then
-                all_opts="$pinned_opts $cmd";
-                if echo "$all_opts" | grep -qE "'![^']*'"; then
-                    filtered=();
-                    for m in "${matches[@]}"; do
-                        excluded=false;
-                        while IFS= read -r pattern; do
-                            if [[ -n "$pattern" && "$(basename "$m")" == $pattern ]]; then
-                                excluded=true;
-                                break;
-                            fi;
-                        done < <(echo "$all_opts" | grep -oE "'![^']*'" | sed "s/^'!//;s/'$//");
-                        if [[ "$excluded" == false ]]; then
-                            filtered+=("$m");
-                        fi;
-                    done;
-                    matches=("${filtered[@]}");
-                fi;
-                if [[ ${#matches[@]} -gt 0 ]]; then
-                    cmd="${cmd% *} ${matches[*]}";
-                fi;
-            fi;
-        fi;
-    fi;
-"""
 
-# Mode-aware reload transform
-# Reads state from RGI_STATE_FILE to determine if pinned opts should be prepended
-RELOAD_TRANSFORM_SCRIPT = """
-    state_file="$RGI_STATE_FILE";
-    pinned_opts="";
-    if [[ -f "$state_file" ]]; then
-        state=$(cat "$state_file");
-        mode="${state%%|*}";
-        if [[ "$mode" == "pinned" ]]; then
-            pinned_opts="${state#*|}";
-        fi;
-    fi;
-    cmd="$FZF_QUERY";
-    __GLOB_EXPAND__
-    if [[ "$cmd" =~ ^rg ]]; then
-        cmd="${cmd#rg}";
-        if [[ -n "$pinned_opts" ]]; then
-            cmd="rg $pinned_opts __IMPLICIT_OPTS__$cmd";
-        else
-            cmd="rg __IMPLICIT_OPTS__$cmd";
-        fi;
-    fi;
-    printf 'reload:RIPGREP_CONFIG_PATH= eval %q 2>/dev/null | __DELTA__' "$cmd"
-"""
+def main() -> None:
+    """Main entry point for rgi."""
+    # Add script directory to PATH for helper scripts
+    script_dir = str(Path(__file__).resolve().parent)
+    os.environ["PATH"] = f"{script_dir}:{os.environ.get('PATH', '')}"
 
-# Start reload for pinned mode (config_args prepended)
-START_RELOAD_PINNED_SCRIPT = """
-    pinned_opts="__CONFIG_ARGS__";
-    cmd={q};
-    __GLOB_EXPAND__
-    if [[ "$cmd" =~ ^rg ]]; then
-        cmd="${cmd#rg}";
-        cmd="rg __CONFIG_ARGS__ __IMPLICIT_OPTS__$cmd";
-    fi;
-    RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | __DELTA__
-"""
+    # Parse arguments
+    pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
 
-# Start reload for inline mode (no config_args)
-START_RELOAD_INLINE_SCRIPT = """
-    pinned_opts="";
-    cmd={q};
-    __GLOB_EXPAND__
-    if [[ "$cmd" =~ ^rg ]]; then
-        cmd="${cmd#rg}";
-        cmd="rg __IMPLICIT_OPTS__$cmd";
-    fi;
-    RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | __DELTA__
-"""
+    # Parse ripgrep config
+    ripgrep_config_path = os.environ.get("RIPGREP_CONFIG_PATH", "")
+    config_args = parse_ripgrep_config(ripgrep_config_path)
 
-# Tab completion for paths
-# Single match: complete fully, add / for directories
-# Multiple matches: complete to longest common prefix
-TAB_COMPLETE_SCRIPT = r"""
-    q="$FZF_QUERY";
-    last="${q##* }";
-    [[ "$last" == -* || -z "$last" ]] && { echo "$q"; exit; };
-    IFS=$'\n' read -d '' -ra matches < <(compgen -f -- "$last" 2>/dev/null; printf '\0');
-    if [[ ${#matches[@]} -eq 1 ]]; then
-        m="${matches[0]}";
-        [[ -d "$m" ]] && m="$m/";
-        echo "${q% *} $m";
-    elif [[ ${#matches[@]} -gt 1 ]]; then
-        pfx="${matches[0]}";
-        for m in "${matches[@]}"; do
-            while [[ "${m:0:${#pfx}}" != "$pfx" && -n "$pfx" ]]; do
-                pfx="${pfx:0:-1}";
-            done;
-        done;
-        [[ "$pfx" != "$last" ]] && echo "${q% *} $pfx" || echo "$q";
-    else
-        echo "$q";
-    fi
-"""
+    # Create state file for toggle feature
+    initial_mode = "pinned" if config_args else "inline"
+    create_state_file(initial_mode, config_args)
 
-# Cursor positioning on startup (only if user hasn't typed)
-CURSOR_POSITION_SCRIPT = (
-    '[[ "$FZF_QUERY" == "rg " ]] && '
-    'echo "change-query(rg  .)+backward-char+backward-char+unbind(result)" || '
-    'echo "unbind(result)"'
-)
+    # Build and run fzf command
+    fzf_args = build_rgi_fzf_command(pattern, paths, rg_opts, config_args)
+    fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_args)
+
+    # Run fzf with empty input (command mode doesn't use item list)
+    sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True, executable="/bin/bash"))
+
 
 if __name__ == "__main__":
     main()
