@@ -6,7 +6,7 @@ This is the main entry point for rgi. It operates in "command mode" where
 the fzf query line IS the ripgrep command being constructed.
 
 Architecture:
-- Framework layer (rgi.fzf): Generic fzf command building
+- Framework layer (rgi.fzfui): Generic fzf UI framework (mirrors standalone fzfui)
 - Shell scripts layer (rgi.shell_scripts): Bash script templates
 - Application layer (this file): rgi-specific logic and configuration
 """
@@ -22,7 +22,7 @@ from pathlib import Path
 # Add parent directory to path so we can import rgi modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from rgi.fzf import FzfCommandBuilder, FzfConfig, base_bindings
+from rgi.fzfui import App, Config, default_bindings
 from rgi.shell_scripts import (
     CURSOR_POSITION,
     build_reload_transform,
@@ -197,8 +197,8 @@ def build_rgi_fzf_command(
     )
     enter_execute = f"{save_history} open-in-editor {{1}} {{2}}"
 
-    # Configure fzf
-    config = FzfConfig(
+    # Configure fzf using the framework
+    config = Config(
         disabled=True,
         delimiter=":",
         initial_query=initial_query,
@@ -206,27 +206,27 @@ def build_rgi_fzf_command(
         preview_window="up,70%,~3,noinfo",
         history_file=str(HISTORY_FILE),
         footer=initial_footer,
-        bindings=base_bindings(),
+        bindings=default_bindings(),
     )
 
-    # Build command with framework
-    builder = FzfCommandBuilder(config)
+    # Build command with App (mirrors fzfui.App)
+    app = App(config)
 
-    # Add rgi-specific bindings
-    builder.add_binding("start", f"reload:{start_reload}", "Initial load")
+    # Add rgi-specific actions
+    app.action("start", f"reload:{start_reload}", "Initial load")
 
     # Cursor positioning on startup (only when no pattern given)
     if not pattern and not paths and not rg_opts:
-        builder.add_binding("result", f"transform:{CURSOR_POSITION}", "Position cursor")
+        app.action("result", f"transform:{CURSOR_POSITION}", "Position cursor")
     else:
-        builder.add_binding("result", "ignore", "Skip cursor positioning")
+        app.action("result", "ignore", "Skip cursor positioning")
 
-    builder.add_binding("change", f"transform:{reload_transform}", "Reload on change")
-    builder.add_binding("enter", f"execute:{enter_execute}", "Open in editor")
-    builder.add_binding("ctrl-\\", "transform:rgi-toggle-pinned", "Toggle inline/pinned")
-    builder.add_binding("tab", f"transform-query:{tab_complete}", "Tab completion")
+    app.action("change", f"transform:{reload_transform}", "Reload on change")
+    app.action("enter", f"execute:{enter_execute}", "Open in editor")
+    app.action("ctrl-\\", "transform:rgi-toggle-pinned", "Toggle inline/pinned")
+    app.action("tab", f"transform-query:{tab_complete}", "Tab completion")
 
-    return builder.build_args()
+    return app.build_args()
 
 
 # =============================================================================
