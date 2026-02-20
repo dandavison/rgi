@@ -23,70 +23,70 @@ if [[ "$editor" = /* ]] && [[ -x "$editor" ]]; then
 fi
 
 case "$editor" in
-    emacs|emacsclient)
-        # Emacs using emacsclient
-        if command -v emacsclient >/dev/null 2>&1; then
-            emacsclient --no-wait \
-                --eval "(find-file \"$file\")" \
-                --eval "(goto-line $line)" \
-                --eval "(recenter-top-bottom)" \
-                --eval "(select-frame-set-input-focus (selected-frame))" \
-                --eval "(when (functionp 'pulse-momentary-highlight-one-line) (let ((pulse-delay 0.05)) (pulse-momentary-highlight-one-line (point) 'highlight)))"
-        else
-            echo "Error: emacsclient not found. Please ensure Emacs server is running and emacsclient is installed." >&2
-            exit 1
-        fi
-        ;;
-    idea|intellij)
-        open "idea://open?file=$file&line=$line"
-        ;;
-    pycharm|charm)
-        # PyCharm command-line interface
-        if command -v charm >/dev/null 2>&1; then
-            charm --line "$line" "$file"
-        else
-            echo "Error: PyCharm command 'charm' not found. Please install PyCharm command-line launcher." >&2
-            exit 1
-        fi
-        ;;
-    vscode|code)
-        open "vscode://file/$file:$line"
-        ;;
-    cursor)
-        open "cursor://file/$file:$line"
-        ;;
-    helix|hx)
-        # Helix editor - supports file:line:column format
-        if command -v hx >/dev/null 2>&1; then
-            hx "$file:$line"
-        else
-            echo "Error: Helix editor 'hx' not found. Please install Helix." >&2
-            exit 1
-        fi
-        ;;
-    zed)
-        # Zed editor - supports file:line:column format
-        if command -v zed >/dev/null 2>&1; then
-            zed "$file:$line"
-        else
-            echo "Error: Zed editor not found. Please install Zed." >&2
-            exit 1
-        fi
-        ;;
-    wormhole)
-        wormhole file "$file":"$line"
-        ;;
-    vim)
-        vim "+$line" "$file"
-        ;;
-    *)
-        if command -v "$editor" >/dev/null 2>&1; then
-            "$editor" "+$line" "$file"
-        else
-            echo "Error: Unknown editor '$editor'. Set RGI_EDITOR or EDITOR to one of:" >&2
-            echo "  emacs, idea, pycharm, vscode, cursor, helix, zed, wormhole, vim" >&2
-            echo "  or an absolute path to an executable that accepts <file> <line> arguments" >&2
-            exit 1
-        fi
-        ;;
+emacs | emacsclient)
+    # Emacs using emacsclient
+    if command -v emacsclient >/dev/null 2>&1; then
+        emacsclient --no-wait \
+            --eval "(find-file \"$file\")" \
+            --eval "(goto-line $line)" \
+            --eval "(recenter-top-bottom)" \
+            --eval "(select-frame-set-input-focus (selected-frame))" \
+            --eval "(when (functionp 'pulse-momentary-highlight-one-line) (let ((pulse-delay 0.05)) (pulse-momentary-highlight-one-line (point) 'highlight)))"
+    else
+        echo "Error: emacsclient not found. Please ensure Emacs server is running and emacsclient is installed." >&2
+        exit 1
+    fi
+    ;;
+idea | intellij)
+    open "idea://open?file=$file&line=$line"
+    ;;
+pycharm | charm)
+    # PyCharm command-line interface
+    if command -v charm >/dev/null 2>&1; then
+        charm --line "$line" "$file"
+    else
+        echo "Error: PyCharm command 'charm' not found. Please install PyCharm command-line launcher." >&2
+        exit 1
+    fi
+    ;;
+vscode | code)
+    open "vscode://file/$file:$line"
+    ;;
+cursor)
+    open "cursor://file/$file:$line"
+    ;;
+helix | hx)
+    # Helix editor - supports file:line:column format
+    if command -v hx >/dev/null 2>&1; then
+        hx "$file:$line"
+    else
+        echo "Error: Helix editor 'hx' not found. Please install Helix." >&2
+        exit 1
+    fi
+    ;;
+zed)
+    # Zed editor - supports file:line:column format
+    if command -v zed >/dev/null 2>&1; then
+        zed "$file:$line"
+    else
+        echo "Error: Zed editor not found. Please install Zed." >&2
+        exit 1
+    fi
+    ;;
+wormhole)
+    wormhole open "$file":"$line"
+    ;;
+vim)
+    vim "+$line" "$file"
+    ;;
+*)
+    if command -v "$editor" >/dev/null 2>&1; then
+        "$editor" "+$line" "$file"
+    else
+        echo "Error: Unknown editor '$editor'. Set RGI_EDITOR or EDITOR to one of:" >&2
+        echo "  emacs, idea, pycharm, vscode, cursor, helix, zed, wormhole, vim" >&2
+        echo "  or an absolute path to an executable that accepts <file> <line> arguments" >&2
+        exit 1
+    fi
+    ;;
 esac
