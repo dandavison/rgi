@@ -50,8 +50,12 @@ def test_fixture_dir() -> Generator[str, None, None]:
 
 @pytest.fixture(scope="module")
 def rgi_path() -> str:
-    """Get the path to the rgi script."""
-    return str(Path(__file__).parent.parent / "src" / "rgi" / "scripts" / "rgi")
+    """Get the path to the rgi entry point."""
+    import shutil
+
+    path = shutil.which("rgi")
+    assert path, "rgi not found on PATH; is the package installed?"
+    return path
 
 
 def run_rgi_test(command: str, sleep_time: float = 0.5) -> str:

@@ -1,30 +1,258 @@
 """
-CLI entry point for rgi
+rgi - Interactive ripgrep with fzf.
+
+This is the main entry point for rgi. It operates in "command mode" where
+the fzf query line IS the ripgrep command being constructed.
+
+Architecture:
+- Framework layer (rgi.fzfui): Generic fzf UI framework (mirrors standalone fzfui)
+- Shell scripts layer (rgi.shell_scripts): Bash script templates
+- Application layer (this module): rgi-specific logic and configuration
 """
 
+from __future__ import annotations
+
+import atexit
+import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
+from rgi.fzfui import App, Config, default_bindings
+from rgi.shell_scripts import (
+    CURSOR_POSITION,
+    build_reload_transform,
+    build_start_reload_inline,
+    build_start_reload_pinned,
+    build_tab_complete,
+)
 
-def main():
-    """Main entry point for rgi command."""
-    # Get the path to the bundled shell script
-    rgi_script = Path(__file__).parent / "scripts" / "rgi"
+# =============================================================================
+# Constants
+# =============================================================================
 
-    if not rgi_script.exists():
-        print(f"Error: rgi script not found at {rgi_script}", file=sys.stderr)
-        sys.exit(1)
+HISTORY_FILE = Path.home() / ".rgi_history"
+IMPLICIT_OPTS = "--json"
+DELTA_CMD = "delta --grep-output-type classic"
 
-    # Execute the shell script with all arguments passed through
-    try:
-        result = subprocess.run([str(rgi_script)] + sys.argv[1:], check=False)
-        sys.exit(result.returncode)
-    except KeyboardInterrupt:
-        sys.exit(130)  # Standard exit code for Ctrl-C
-    except Exception as e:
-        print(f"Error running rgi: {e}", file=sys.stderr)
-        sys.exit(1)
+
+# =============================================================================
+# Argument Parsing (Application Layer)
+# =============================================================================
+
+
+def parse_arguments(argv: list[str]) -> tuple[str, list[str], str]:
+    """Parse command-line arguments into pattern, paths, and rg options.
+
+    The argument format is: rgi [rg-options] [pattern] [paths...]
+
+    Args:
+        argv: Command-line arguments (excluding the program name)
+
+    Returns:
+        Tuple of (pattern, paths, rg_opts_string)
+    """
+    pattern = ""
+    paths = []
+    rg_opts = ""
+
+    i = 0
+    while i < len(argv):
+        if argv[i].startswith("-"):
+            opt = argv[i]
+            rg_opts += f" {opt}"
+            i += 1
+            # Handle options that take a value argument
+            if opt in ["-g", "--glob", "-t", "--type", "-e", "--regexp"] and i < len(argv):
+                rg_opts += f" '{argv[i]}'"
+                i += 1
+        else:
+            break
+
+    if i < len(argv):
+        pattern = argv[i]
+        i += 1
+    while i < len(argv):
+        paths.append(argv[i])
+        i += 1
+
+    return pattern, paths, rg_opts.strip()
+
+
+def parse_ripgrep_config(config_path: str) -> str:
+    """Parse ripgrep config file into argument string.
+
+    Args:
+        config_path: Path to the ripgrep config file
+
+    Returns:
+        Space-separated string of config arguments
+    """
+    if not config_path or not os.path.isfile(config_path):
+        return ""
+
+    config_args = ""
+    with open(config_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if not line.startswith("-"):
+                line = f"'{line}'"
+            config_args += f" {line}"
+
+    return config_args.strip()
+
+
+# =============================================================================
+# fzf Configuration (Application Layer)
+# =============================================================================
+
+
+def build_initial_query(pattern: str, paths: list[str], rg_opts: str) -> str:
+    """Build the initial query string for fzf.
+
+    Args:
+        pattern: Search pattern
+        paths: List of paths to search
+        rg_opts: Ripgrep options string
+
+    Returns:
+        The initial query to display in fzf
+    """
+    paths_str = " ".join(paths) if paths else "."
+    quoted_pattern = shlex.quote(pattern) if pattern else ""
+    full_command = " ".join(f"rg {rg_opts} {quoted_pattern} {paths_str}".split())
+
+    # When no args, start with just "rg " - we'll add default path later
+    if not pattern and not paths and not rg_opts:
+        full_command = "rg "
+
+    return full_command
+
+
+def create_state_file(initial_mode: str, config_args: str) -> Path:
+    """Create the state file for mode toggling.
+
+    State tracks: mode (pinned/inline) and pinned options.
+    Format: mode|pinned_options
+
+    Args:
+        initial_mode: Either "pinned" or "inline"
+        config_args: The config arguments to store
+
+    Returns:
+        Path to the state file
+    """
+    state_file = Path(f"/tmp/rgi-pinned-{os.getpid()}.state")
+    state_file.write_text(f"{initial_mode}|{config_args}")
+    os.environ["RGI_STATE_FILE"] = str(state_file)
+
+    # Clean up on exit
+    atexit.register(lambda: state_file.unlink(missing_ok=True))
+
+    return state_file
+
+
+def build_rgi_fzf_command(
+    pattern: str,
+    paths: list[str],
+    rg_opts: str,
+    config_args: str,
+) -> list[str]:
+    """Build the complete fzf command for rgi.
+
+    This is where the application layer configures the framework layer.
+
+    Args:
+        pattern: Search pattern
+        paths: List of paths to search
+        rg_opts: Ripgrep options string
+        config_args: Config arguments from RIPGREP_CONFIG_PATH
+
+    Returns:
+        List of fzf command arguments
+    """
+    initial_query = build_initial_query(pattern, paths, rg_opts)
+    initial_footer = config_args if config_args else ""
+
+    # Build shell scripts
+    reload_transform = build_reload_transform(IMPLICIT_OPTS, DELTA_CMD)
+
+    if config_args:
+        start_reload = build_start_reload_pinned(config_args, IMPLICIT_OPTS, DELTA_CMD)
+    else:
+        start_reload = build_start_reload_inline(IMPLICIT_OPTS, DELTA_CMD)
+
+    tab_complete = build_tab_complete()
+
+    # History-aware enter action
+    history_file = str(HISTORY_FILE)
+    save_history = (
+        f'[[ "$(tail -1 {history_file} 2>/dev/null)" != {{q}} ]] && echo {{q}} >> {history_file};'
+    )
+    enter_execute = f"{save_history} open-in-editor {{1}} {{2}}"
+
+    # Configure fzf using the framework
+    config = Config(
+        disabled=True,
+        delimiter=":",
+        initial_query=initial_query,
+        preview_command="[[ -n {1} ]] && rgi-preview {1} {2}",
+        preview_window="up,70%,~3,noinfo",
+        history_file=str(HISTORY_FILE),
+        footer=initial_footer,
+        bindings=default_bindings(),
+    )
+
+    # Build command with App (mirrors fzfui.App)
+    app = App(config)
+
+    # Add rgi-specific actions
+    app.action("start", f"reload:{start_reload}", "Initial load")
+
+    # Cursor positioning on startup (only when no pattern given)
+    if not pattern and not paths and not rg_opts:
+        app.action("result", f"transform:{CURSOR_POSITION}", "Position cursor")
+    else:
+        app.action("result", "ignore", "Skip cursor positioning")
+
+    app.action("change", f"transform:{reload_transform}", "Reload on change")
+    app.action("enter", f"execute:{enter_execute}", "Open in editor")
+    app.action("ctrl-\\", "transform:rgi-toggle-pinned", "Toggle inline/pinned")
+    app.action("tab", f"transform-query:{tab_complete}", "Tab completion")
+
+    return app.build_args()
+
+
+# =============================================================================
+# Main Entry Point
+# =============================================================================
+
+
+def main() -> None:
+    """Main entry point for rgi."""
+    script_dir = str(Path(__file__).resolve().parent / "scripts")
+    os.environ["PATH"] = f"{script_dir}:{os.environ.get('PATH', '')}"
+
+    # Parse arguments
+    pattern, paths, rg_opts = parse_arguments(sys.argv[1:])
+
+    # Parse ripgrep config
+    ripgrep_config_path = os.environ.get("RIPGREP_CONFIG_PATH", "")
+    config_args = parse_ripgrep_config(ripgrep_config_path)
+
+    # Create state file for toggle feature
+    initial_mode = "pinned" if config_args else "inline"
+    create_state_file(initial_mode, config_args)
+
+    # Build and run fzf command
+    fzf_args = build_rgi_fzf_command(pattern, paths, rg_opts, config_args)
+    fzf_cmd_str = " ".join(shlex.quote(arg) for arg in fzf_args)
+
+    # Run fzf with empty input (command mode doesn't use item list)
+    sys.exit(subprocess.call(f'echo "" | {fzf_cmd_str}', shell=True, executable="/bin/bash"))
 
 
 if __name__ == "__main__":

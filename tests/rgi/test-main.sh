@@ -20,10 +20,14 @@ failed_count=0
 
 # Setup test fixtures
 TEST_FIXTURE_DIR="$(pwd)/test-fixture-$$"
-# Get absolute path to rgi and script directory
+# Get script directory and find rgi on PATH
 SCRIPT_REALPATH="$(realpath "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(dirname "$SCRIPT_REALPATH")"
-RGI_PATH="$(realpath "$SCRIPT_DIR/../../src/rgi/scripts/rgi")"
+RGI_PATH="$(command -v rgi)"
+if [[ -z "$RGI_PATH" ]]; then
+    echo "Error: rgi not found on PATH. Is the package installed?" >&2
+    exit 1
+fi
 echo "Setting up test fixtures in $TEST_FIXTURE_DIR..."
 echo "Using rgi at: $RGI_PATH"
 bash "$SCRIPT_DIR/../fixtures/setup_fixtures.sh" "$TEST_FIXTURE_DIR"
@@ -45,10 +49,10 @@ run_test() {
     local test_name="$1"
     local command="$2"
     local expected_pattern="$3"
-    
+
     test_count=$((test_count + 1))
     echo -n "Test $test_count: $test_name... "
-    
+
     # Run the command with test-interactive
     # Use the SCRIPT_DIR that was set at the beginning
     TEST_INTERACTIVE="$SCRIPT_DIR/../test-interactive"
@@ -56,7 +60,7 @@ run_test() {
     # echo "  Debug: PWD=$(pwd)" >&2
     # echo "  Debug: Command=$command" >&2
     output=$("$TEST_INTERACTIVE" "$command" 0.8 2>&1 || true)
-    
+
     if echo "$output" | grep -q "$expected_pattern"; then
         echo -e "${GREEN}PASS${NC}"
         return 0
@@ -107,7 +111,7 @@ run_test "FZF UI renders correctly" \
     "$RGI_PATH --rgi-pattern-mode test ." \
     "─────"
 
-# Test 7: Check preview window border  
+# Test 7: Check preview window border
 run_test "Preview window displays" \
     "$RGI_PATH --rgi-pattern-mode function src" \
     "╭─"
@@ -122,7 +126,7 @@ echo -n "Test $test_count: Default command mode shows results... "
 
 SESSION="test-default-cmd-$$"
 tmux new-session -d -s "$SESSION" "$RGI_PATH TODO ." 2>/dev/null
-sleep 2  # Give more time for command mode to initialize
+sleep 2 # Give more time for command mode to initialize
 output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
 
 # Check that we see results in command mode
@@ -155,9 +159,9 @@ echo -n "Test $test_count: Tab toggles back to pattern mode... "
 SESSION="test-toggle-$$"
 tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode TODO ." 2>/dev/null
 sleep 1.5
-tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null # Switch to command mode
 sleep 1.5
-tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch back to pattern mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null # Switch back to pattern mode
 sleep 1.5
 output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
 
@@ -179,7 +183,7 @@ echo -n "Test $test_count: Typing in command mode shows results... "
 SESSION="test-type-$$"
 tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode TODO ." 2>/dev/null
 sleep 1.5
-tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null # Switch to command mode
 sleep 1.5
 # Add a space to trigger reload
 tmux send-keys -t "$SESSION" " " 2>/dev/null
@@ -203,10 +207,10 @@ echo -n "Test $test_count: Editing command in command mode updates results... "
 SESSION="test-edit-$$"
 tmux new-session -d -s "$SESSION" "$RGI_PATH --rgi-pattern-mode test ." 2>/dev/null
 sleep 1.5
-tmux send-keys -t "$SESSION" Tab 2>/dev/null  # Switch to command mode
+tmux send-keys -t "$SESSION" Tab 2>/dev/null # Switch to command mode
 sleep 1.5
 # Clear the command and type a new one searching for TODO
-tmux send-keys -t "$SESSION" C-u 2>/dev/null  # Clear line
+tmux send-keys -t "$SESSION" C-u 2>/dev/null # Clear line
 tmux send-keys -t "$SESSION" "rg --follow -i --hidden -g '!.git/*' --json TODO ." 2>/dev/null
 sleep 2
 output=$(tmux capture-pane -t "$SESSION" -p 2>/dev/null || true)
@@ -232,8 +236,8 @@ sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null
 sleep 1.5
 # Edit command to change . to shell-config
-tmux send-keys -t "$SESSION" C-e 2>/dev/null  # Go to end
-tmux send-keys -t "$SESSION" BSpace 2>/dev/null  # Delete .
+tmux send-keys -t "$SESSION" C-e 2>/dev/null    # Go to end
+tmux send-keys -t "$SESSION" BSpace 2>/dev/null # Delete .
 tmux send-keys -t "$SESSION" "shell-config" 2>/dev/null
 sleep 1.5
 # Switch back to pattern mode
@@ -264,10 +268,10 @@ sleep 1.5
 tmux send-keys -t "$SESSION" Tab 2>/dev/null
 sleep 1.5
 # Add a glob pattern to exclude HTML files
-tmux send-keys -t "$SESSION" C-a 2>/dev/null  # Go to beginning
+tmux send-keys -t "$SESSION" C-a 2>/dev/null # Go to beginning
 # Find the position after rg command options
-tmux send-keys -t "$SESSION" M-f M-f M-f M-f 2>/dev/null  # Skip words to get past basic options
-tmux send-keys -t "$SESSION" " -g '!*.html'" 2>/dev/null  # Add glob pattern
+tmux send-keys -t "$SESSION" M-f M-f M-f M-f 2>/dev/null # Skip words to get past basic options
+tmux send-keys -t "$SESSION" " -g '!*.html'" 2>/dev/null # Add glob pattern
 sleep 1.5
 # Switch back to pattern mode
 tmux send-keys -t "$SESSION" Tab 2>/dev/null
@@ -325,8 +329,8 @@ echo -n "Test $test_count: Patterns with spaces work correctly... "
 SESSION="test-spaces-$$"
 # Create a file with the target pattern
 mkdir -p "$TEST_FIXTURE_DIR/test-spaces"
-echo "func SomeUpdateWorkflowExecutionAsActive() {}" > "$TEST_FIXTURE_DIR/test-spaces/workflow.go"
-echo "func OtherFunction() {}" >> "$TEST_FIXTURE_DIR/test-spaces/workflow.go"
+echo "func SomeUpdateWorkflowExecutionAsActive() {}" >"$TEST_FIXTURE_DIR/test-spaces/workflow.go"
+echo "func OtherFunction() {}" >>"$TEST_FIXTURE_DIR/test-spaces/workflow.go"
 
 # Pattern with space that should match only the first function
 PATTERN="func .*UpdateWorkflowExecutionAsActive"

@@ -21,7 +21,6 @@ import re
 import shlex
 import signal
 import sys
-from pathlib import Path
 from typing import List, Tuple
 
 
@@ -165,30 +164,19 @@ def switch_to_pattern_mode(query: str, rg_opts: str, paths: List[str]) -> None:
     elif not paths or paths == ["."]:
         paths = ["."]
 
-    # Get the rgi script path (same directory as this script)
-    script_dir: Path = Path(__file__).parent
-    rgi_path: Path = script_dir / "rgi"
+    args: List[str] = ["rgi"]
 
-    # Build the new rgi command
-    args: List[str] = [str(rgi_path)]
-
-    # Add any existing rg_opts
     if rg_opts:
         args.extend(shlex.split(rg_opts))
 
-    # Add extracted options if any
     if options:
         args.extend(shlex.split(options))
 
-    # Add pattern mode flag
     args.append("--rgi-pattern-mode")
-
-    # Add pattern and paths
     args.append(pattern)
     args.extend(paths)
 
-    # Execute the new rgi instance
-    os.execvp(args[0], args)
+    os.execvp("rgi", args)
 
 
 def switch_to_command_mode(pattern: str, rg_opts: str, paths: List[str]) -> None:
@@ -199,26 +187,16 @@ def switch_to_command_mode(pattern: str, rg_opts: str, paths: List[str]) -> None
         rg_opts: Ripgrep options
         paths: Paths to search
     """
-    # Get the rgi script path (same directory as this script)
-    script_dir: Path = Path(__file__).parent
-    rgi_path: Path = script_dir / "rgi"
+    args: List[str] = ["rgi"]
 
-    # Build the new rgi command
-    args: List[str] = [str(rgi_path)]
-
-    # Add any rg_opts
     if rg_opts:
         args.extend(shlex.split(rg_opts))
 
-    # Add command mode flag
     args.append("--rgi-command-mode")
-
-    # Add pattern and paths
     args.append(pattern)
     args.extend(paths)
 
-    # Execute the new rgi instance
-    os.execvp(args[0], args)
+    os.execvp("rgi", args)
 
 
 def main() -> None:
@@ -244,9 +222,7 @@ def main() -> None:
         if arg.startswith("-"):
             rg_opts.append(arg)
             # Check if this option takes a value
-            if i + 1 < len(remaining_args) and not remaining_args[i + 1].startswith(
-                "-"
-            ):
+            if i + 1 < len(remaining_args) and not remaining_args[i + 1].startswith("-"):
                 rg_opts.append(remaining_args[i + 1])
                 i += 1
         else:
