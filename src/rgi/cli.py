@@ -200,7 +200,7 @@ def build_rgi_fzf_command(
         delimiter=":",
         initial_query=initial_query,
         preview_command="[[ -n {1} ]] && rgi-preview {1} {2}",
-        preview_window="up,70%,~3,noinfo",
+        preview_window="up,70%,~3,noinfo,+{2}-10",
         history_file=str(HISTORY_FILE),
         footer=initial_footer,
         bindings=default_bindings(),

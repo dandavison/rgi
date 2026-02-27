@@ -3,12 +3,15 @@
 file="$1"
 line="$2"
 
-start_line=$((line - 10))
-start_line=$((start_line < 1 ? 1 : start_line))
-
-bat --color=always \
-    --style=header,grid \
-    --terminal-width=999 \
-    -H $line \
-    -r $start_line:+70 \
-    "$file"
+case "$file" in
+  *.md|*.markdown)
+    if command -v mdcat &>/dev/null; then
+      mdcat --ansi "$file"
+    else
+      bat --color=always --style=header,grid --terminal-width=999 -H "$line" "$file"
+    fi
+    ;;
+  *)
+    bat --color=always --style=header,grid --terminal-width=999 -H "$line" "$file"
+    ;;
+esac
