@@ -225,6 +225,49 @@ def test_script_invocation_on_platform(scripts_in_path, platform):
             )
 
 
+def test_copy_command_invocation(scripts_in_path):
+    """Test: Verify rgi-copy-command echoes the command and copies it to clipboard.
+
+    Bound to Ctrl-C, fzf invokes: rgi-copy-command <command>
+    The command is always echoed to stderr (for terminal scrollback) and copied
+    to the clipboard when a clipboard tool is available.
+    """
+    command = "rg -il 'conflict policy' ."
+
+    result = subprocess.run(
+        ["rgi-copy-command", command],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert command in result.stderr, (
+        f"Expected command echoed to stderr, got: {result.stderr}"
+    )
+
+    has_clipboard = any(
+        shutil.which(tool) for tool in ("pbcopy", "xclip", "xsel", "wl-copy")
+    )
+    if has_clipboard:
+        assert result.returncode == 0, f"rgi-copy-command failed: {result.stderr}"
+    else:
+        assert "clipboard" in result.stderr.lower()
+
+
+def test_ctrl_c_binding_copies_command():
+    """Test: Verify Ctrl-C is bound to copy the rg command to the clipboard and exit."""
+    from rgi.cli import build_rgi_fzf_command
+
+    args = build_rgi_fzf_command(pattern="", paths=[], rg_opts="", config_args="")
+    binding = next(
+        (args[i + 1] for i, a in enumerate(args) if a == "--bind" and args[i + 1].startswith("ctrl-c:")),
+        None,
+    )
+    assert binding is not None, "No ctrl-c binding found"
+    assert "rgi-copy-command" in binding
+    assert "abort" in binding
+
+
 def test_rgi_cli_entry_point():
     """Test: Verify the Python entry point (rgi.cli:main) works correctly."""
     from rgi.cli import main
