@@ -1,0 +1,21 @@
+#!/bin/bash
+
+command="$1"
+
+# Always echo the command so it lands in terminal scrollback on exit.
+printf '%s\n' "$command" >&2
+
+if command -v pbcopy >/dev/null 2>&1; then
+  clip=(pbcopy)
+elif command -v xclip >/dev/null 2>&1; then
+  clip=(xclip -selection clipboard)
+elif command -v xsel >/dev/null 2>&1; then
+  clip=(xsel --clipboard --input)
+elif command -v wl-copy >/dev/null 2>&1; then
+  clip=(wl-copy)
+else
+  echo "rgi: no clipboard tool found (install pbcopy, xclip, xsel, or wl-copy)" >&2
+  exit 1
+fi
+
+printf '%s' "$command" | "${clip[@]}"

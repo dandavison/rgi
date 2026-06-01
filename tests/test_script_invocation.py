@@ -178,7 +178,7 @@ def test_cli_adds_scripts_to_path():
 
 def test_helper_scripts_packaged():
     """Test: Verify helper scripts are packaged correctly for installation."""
-    expected_scripts = ["rgi-preview", "rgi-switch-mode", "open-in-editor"]
+    expected_scripts = ["rgi-preview", "rgi-switch-mode", "open-in-editor", "rgi-copy-command"]
     scripts_dir = get_rgi_scripts_dir()
 
     for script_name in expected_scripts:
@@ -241,13 +241,9 @@ def test_copy_command_invocation(scripts_in_path):
         timeout=5,
     )
 
-    assert command in result.stderr, (
-        f"Expected command echoed to stderr, got: {result.stderr}"
-    )
+    assert command in result.stderr, f"Expected command echoed to stderr, got: {result.stderr}"
 
-    has_clipboard = any(
-        shutil.which(tool) for tool in ("pbcopy", "xclip", "xsel", "wl-copy")
-    )
+    has_clipboard = any(shutil.which(tool) for tool in ("pbcopy", "xclip", "xsel", "wl-copy"))
     if has_clipboard:
         assert result.returncode == 0, f"rgi-copy-command failed: {result.stderr}"
     else:
@@ -260,7 +256,11 @@ def test_ctrl_c_binding_copies_command():
 
     args = build_rgi_fzf_command(pattern="", paths=[], rg_opts="", config_args="")
     binding = next(
-        (args[i + 1] for i, a in enumerate(args) if a == "--bind" and args[i + 1].startswith("ctrl-c:")),
+        (
+            args[i + 1]
+            for i, a in enumerate(args)
+            if a == "--bind" and args[i + 1].startswith("ctrl-c:")
+        ),
         None,
     )
     assert binding is not None, "No ctrl-c binding found"

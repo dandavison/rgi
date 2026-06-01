@@ -193,6 +193,7 @@ def build_rgi_fzf_command(
         f'[[ "$(tail -1 {history_file} 2>/dev/null)" != {{q}} ]] && echo {{q}} >> {history_file};'
     )
     enter_execute = f"{save_history} open-in-editor {{1}} {{2}}"
+    copy_command = f"{save_history} rgi-copy-command {{q}}"
 
     # Configure fzf using the framework
     config = Config(
@@ -220,6 +221,7 @@ def build_rgi_fzf_command(
 
     app.action("change", f"transform:{reload_transform}", "Reload on change")
     app.action("enter", f"execute:{enter_execute}", "Open in editor")
+    app.action("ctrl-c", f"execute({copy_command})+abort", "Copy rg command and exit")
     app.action("ctrl-\\", "transform:rgi-toggle-pinned", "Toggle inline/pinned")
     app.action("tab", f"transform-query:{tab_complete}", "Tab completion")
 

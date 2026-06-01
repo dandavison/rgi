@@ -8,6 +8,7 @@ Enter `rgi`, then use [ripgrep](https://manpages.ubuntu.com/manpages/jammy/man1/
 **Keyboard shortcuts**
 
 - **`Enter`**: Open the line in your editor / IDE
+- **`Ctrl+C`**: Copy the current `rg` command to the clipboard, then exit
 - **`Ctrl+\`**: Toggle `rg` options inline for editing vs pinned in footer
 - **`Alt+Up/Down`**: Navigate history of past `rgi` searches
 
