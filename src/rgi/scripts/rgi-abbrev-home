@@ -1,0 +1,11 @@
+#!/usr/bin/env perl
+# Abbreviate $HOME to ~ in delta's grep output, leaving OSC8 hyperlink targets
+# (\e]8;;URL\e\\) untouched so click-to-open links keep their absolute paths.
+use strict;
+use warnings;
+
+my $home = $ENV{HOME} // '';
+while (<STDIN>) {
+    s{(\e\]8;;[^\e]*\e\\)|\Q$home\E/}{ defined $1 ? $1 : "~/" }ge if $home ne '';
+    print;
+}

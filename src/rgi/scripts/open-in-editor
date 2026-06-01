@@ -1,6 +1,6 @@
 #!/bin/bash
 
-file="$1"
+file="${1/#\~\//$HOME/}"
 line="$2"
 editor="${RGI_EDITOR:-${EDITOR:-vscode}}"
 

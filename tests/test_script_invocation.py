@@ -164,6 +164,46 @@ def test_open_in_editor_invocation(scripts_in_path, tmp_path, monkeypatch):
     assert result.returncode == 0, f"open-in-editor failed: {result.stderr}"
 
 
+def test_abbrev_home_filter(scripts_in_path, monkeypatch):
+    """Test: rgi-abbrev-home replaces $HOME with ~ in the visible path but leaves
+    OSC8 hyperlink targets (the click-to-open URL) absolute."""
+    monkeypatch.setenv("HOME", "/Users/dan")
+    esc = "\x1b"
+    url = f"{esc}]8;;http://wormhole:7117/file//Users/dan/p/f.md:9?land-in=editor{esc}\\"
+    visible = f"{esc}[31m/Users/dan/p/f.md{esc}[0m"
+    line = f"{url}{visible}:{esc}[32m9{esc}[0m:hit\n"
+
+    result = subprocess.run(
+        ["rgi-abbrev-home"],
+        input=line,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert result.returncode == 0, f"rgi-abbrev-home failed: {result.stderr}"
+    out = result.stdout
+    assert f"{esc}[31m~/p/f.md{esc}[0m" in out, "visible path not abbreviated"
+    assert "file//Users/dan/p/f.md:9?land-in=editor" in out, "hyperlink target was altered"
+
+
+def test_open_in_editor_expands_tilde(scripts_in_path, monkeypatch):
+    """Test: open-in-editor expands a leading ~ (rgi displays paths with ~)."""
+    monkeypatch.setenv("RGI_EDITOR", "echo")
+
+    result = subprocess.run(
+        ["open-in-editor", "~/some/file.py", "7"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert result.returncode == 0, f"open-in-editor failed: {result.stderr}"
+    home = os.environ["HOME"]
+    assert f"{home}/some/file.py" in result.stdout, f"~ not expanded: {result.stdout}"
+    assert "~/some/file.py" not in result.stdout, "literal ~ leaked to editor"
+
+
 def test_cli_adds_scripts_to_path():
     """Test: Verify rgi.cli:main adds scripts directory to PATH.
 
@@ -178,7 +218,13 @@ def test_cli_adds_scripts_to_path():
 
 def test_helper_scripts_packaged():
     """Test: Verify helper scripts are packaged correctly for installation."""
-    expected_scripts = ["rgi-preview", "rgi-switch-mode", "open-in-editor", "rgi-copy-command"]
+    expected_scripts = [
+        "rgi-preview",
+        "rgi-switch-mode",
+        "open-in-editor",
+        "rgi-copy-command",
+        "rgi-abbrev-home",
+    ]
     scripts_dir = get_rgi_scripts_dir()
 
     for script_name in expected_scripts:

@@ -89,7 +89,7 @@ RELOAD_TRANSFORM = """
             cmd="rg {implicit_opts}$cmd";
         fi;
     fi;
-    printf 'reload:RIPGREP_CONFIG_PATH= eval %q 2>/dev/null | {delta}' "$cmd"
+    printf 'reload:RIPGREP_CONFIG_PATH= eval %q 2>/dev/null | {delta} | rgi-abbrev-home' "$cmd"
 """
 
 # Start reload for pinned mode (config_args prepended)
@@ -101,7 +101,7 @@ START_RELOAD_PINNED = """
         cmd="${{cmd#rg}}";
         cmd="rg {config_args} {implicit_opts}$cmd";
     fi;
-    RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+    RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta} | rgi-abbrev-home
 """
 
 # Start reload for inline mode (no config_args)
@@ -113,7 +113,7 @@ START_RELOAD_INLINE = """
         cmd="${{cmd#rg}}";
         cmd="rg {implicit_opts}$cmd";
     fi;
-    RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta}
+    RIPGREP_CONFIG_PATH= eval "$cmd" 2>/dev/null | {delta} | rgi-abbrev-home
 """
 
 # Tab completion for paths
