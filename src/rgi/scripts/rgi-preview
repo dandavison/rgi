@@ -5,7 +5,7 @@ line="$2"
 
 case "$file" in
   *.md|*.markdown)
-    if command -v mdcat &>/dev/null; then
+    if [[ -z "$RGI_PREVIEW_RAW" ]] && command -v mdcat &>/dev/null; then
       mdcat --ansi "$file"
     else
       bat --color=always --style=header,grid --terminal-width=999 -H "$line" "$file"
