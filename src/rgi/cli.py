@@ -174,7 +174,10 @@ def build_rgi_fzf_command(
     Returns:
         List of fzf command arguments
     """
-    initial_query = build_initial_query(pattern, paths, rg_opts)
+    # Under tide, $TIDE_QUERY is a full `rg ...` command line to restore
+    # verbatim (it already includes quoting); don't re-parse it as a pattern.
+    tide_query = os.environ.get("TIDE_QUERY")
+    initial_query = tide_query or build_initial_query(pattern, paths, rg_opts)
     initial_footer = config_args if config_args else ""
 
     # Build shell scripts
@@ -213,8 +216,8 @@ def build_rgi_fzf_command(
     # Add rgi-specific actions
     app.action("start", f"reload:{start_reload}", "Initial load")
 
-    # Cursor positioning on startup (only when no pattern given)
-    if not pattern and not paths and not rg_opts:
+    # Cursor positioning on startup (only when starting from a bare `rg `)
+    if not tide_query and not pattern and not paths and not rg_opts:
         app.action("result", f"transform:{CURSOR_POSITION}", "Position cursor")
     else:
         app.action("result", "ignore", "Skip cursor positioning")

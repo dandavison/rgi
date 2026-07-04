@@ -1213,3 +1213,25 @@ def test_ctrl_bracket_toggles_mode(test_fixture_dir, rgi_path):
             timeout=5,
         )
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
+def test_tide_query_restored_verbatim(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Under tide, $TIDE_QUERY is a full `rg ...` line restored verbatim.
+
+    Regression: it was passed as a positional pattern and re-quoted by
+    build_initial_query on every view switch, escalating the quoting
+    (rg 'rg '"'"'rg ...'"'"' ...' ...) each time.
+    """
+    from rgi.cli import build_rgi_fzf_command
+
+    monkeypatch.setenv("TIDE_STATE", "/tmp/tide-test-state")
+    query = "rg 'foo' ."
+    monkeypatch.setenv("TIDE_QUERY", query)
+    args = build_rgi_fzf_command("", [], "", "")
+    assert args[args.index("--query") + 1] == query
+
+    # Feeding the restored query back in (what each switch does) must be a
+    # fixed point, not accumulate quoting.
+    monkeypatch.setenv("TIDE_QUERY", args[args.index("--query") + 1])
+    args2 = build_rgi_fzf_command("", [], "", "")
+    assert args2[args2.index("--query") + 1] == query
