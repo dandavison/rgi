@@ -221,10 +221,15 @@ def build_rgi_fzf_command(
 
     app.action("change", f"transform:{reload_transform}", "Reload on change")
     if os.environ.get("TIDE_STATE"):
-        emit_edit = f"{save_history} printf 'edit\\t%s:%s' {{1}} {{2}} > \"$TIDE_STATE\""
+        save_q = 'printf %s {q} > "$TIDE_QUERY_OUT";'
+        emit_edit = f"{save_history} {save_q} printf 'edit\\t%s:%s' {{1}} {{2}} > \"$TIDE_STATE\""
         app.action("enter", f"execute({emit_edit})+abort", "Edit selection")
-        for key, view in (("alt-f", "files"), ("alt-d", "git"), ("alt-k", "edit")):
-            app.action(key, f'execute(printf %s {view} > "$TIDE_STATE")+abort', f"Switch to {view}")
+        for key, view in (("alt-j", "files"), ("alt-l", "git"), ("alt-;", "edit")):
+            app.action(
+                key,
+                f'execute({save_q} printf %s {view} > "$TIDE_STATE")+abort',
+                f"Switch to {view}",
+            )
     else:
         app.action("enter", f"execute:{enter_execute}", "Open in editor")
     app.action("ctrl-c", f"execute({copy_command})+abort", "Copy rg command and exit")
