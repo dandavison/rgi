@@ -2,7 +2,7 @@
 
 file="${1/#\~\//$HOME/}"
 line="$2"
-editor="${RGI_EDITOR:-${EDITOR:-vscode}}"
+editor="${3:-${RGI_EDITOR:-${EDITOR:-vscode}}}"
 
 # Convert relative path to absolute path for editor URLs
 # This allows users to search with relative paths but still open files correctly

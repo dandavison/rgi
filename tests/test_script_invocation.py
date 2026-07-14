@@ -164,6 +164,27 @@ def test_open_in_editor_invocation(scripts_in_path, tmp_path, monkeypatch):
     assert result.returncode == 0, f"open-in-editor failed: {result.stderr}"
 
 
+def test_open_in_editor_arg_overrides_env(scripts_in_path, tmp_path, monkeypatch):
+    """Test: a 3rd arg selects the editor, overriding RGI_EDITOR.
+
+    This is how the alternate-editor key (ctrl-o) opens a result in a second
+    editor without disturbing the Enter default.
+    """
+    test_file = tmp_path / "test.py"
+    test_file.write_text("# Line 1\n# Line 2\n")
+
+    monkeypatch.setenv("RGI_EDITOR", "no-such-editor-xyz")
+
+    result = subprocess.run(
+        ["open-in-editor", str(test_file), "2", "echo"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert result.returncode == 0, f"3rd-arg editor override ignored: {result.stderr}"
+
+
 def test_abbrev_home_filter(scripts_in_path, monkeypatch):
     """Test: rgi-abbrev-home replaces $HOME with ~ in the visible path but leaves
     OSC8 hyperlink targets (the click-to-open URL) absolute."""
