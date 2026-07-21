@@ -32,9 +32,16 @@ from rgi.shell_scripts import (
 # Constants
 # =============================================================================
 
-HISTORY_FILE = Path.home() / ".rgi_history"
+HISTORY_DIR = Path.home() / ".rgi_history.d"
 IMPLICIT_OPTS = "--json"
 DELTA_CMD = "delta --grep-output-type classic"
+
+
+def history_file_for_cwd() -> Path:
+    """Return the per-directory fzf history file for the current working directory."""
+    history_file = HISTORY_DIR / Path.cwd().resolve().relative_to("/") / "history"
+    history_file.parent.mkdir(parents=True, exist_ok=True)
+    return history_file
 
 
 # =============================================================================
@@ -188,7 +195,7 @@ def build_rgi_fzf_command(
     tab_complete = build_tab_complete()
 
     # History-aware enter action
-    history_file = str(HISTORY_FILE)
+    history_file = str(history_file_for_cwd())
     save_history = (
         f'[[ "$(tail -1 {history_file} 2>/dev/null)" != {{q}} ]] && echo {{q}} >> {history_file};'
     )
@@ -204,7 +211,7 @@ def build_rgi_fzf_command(
         initial_query=initial_query,
         preview_command="[[ -n {1} ]] && rgi-preview {1} {2}",
         preview_window="up,70%,~3,noinfo,+{2}-10",
-        history_file=str(HISTORY_FILE),
+        history_file=history_file,
         footer=initial_footer,
         bindings=default_bindings(),
     )

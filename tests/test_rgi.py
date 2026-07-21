@@ -251,7 +251,9 @@ def test_history_navigation(test_fixture_dir, rgi_path):
     import subprocess
 
     # Create a history file with a previous search
-    history_file = Path.home() / ".rgi_history"
+    from rgi.cli import history_file_for_cwd
+
+    history_file = history_file_for_cwd()
     original_history = None
     if history_file.exists():
         original_history = history_file.read_text()
@@ -323,7 +325,9 @@ def test_history_saves_on_enter(test_fixture_dir, rgi_path):
     """Test: History is saved when pressing Enter to open a result."""
     import subprocess
 
-    history_file = Path.home() / ".rgi_history"
+    from rgi.cli import history_file_for_cwd
+
+    history_file = history_file_for_cwd()
     original_history = None
     if history_file.exists():
         original_history = history_file.read_text()
