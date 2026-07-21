@@ -223,6 +223,29 @@ def test_default_command_mode(test_fixture_dir, rgi_path):
     assert "rg" in output, f"Expected 'rg' command in output, got:\n{output}"
 
 
+def test_history_file_is_per_directory():
+    """Test: the history file path is derived from the current working directory."""
+    from rgi.cli import HISTORY_DIR, history_file_for_cwd
+
+    original_dir = os.getcwd()
+    dir_a = tempfile.mkdtemp(prefix="rgi-hist-a-")
+    dir_b = tempfile.mkdtemp(prefix="rgi-hist-b-")
+    try:
+        os.chdir(dir_a)
+        file_a = history_file_for_cwd()
+        os.chdir(dir_b)
+        file_b = history_file_for_cwd()
+
+        assert file_a != file_b, "Distinct directories must map to distinct history files"
+        assert HISTORY_DIR in file_a.parents
+        assert HISTORY_DIR in file_b.parents
+        assert file_a.parent.is_dir(), "Parent directory must be created"
+    finally:
+        os.chdir(original_dir)
+        shutil.rmtree(dir_a, ignore_errors=True)
+        shutil.rmtree(dir_b, ignore_errors=True)
+
+
 def test_history_navigation(test_fixture_dir, rgi_path):
     """Test: Alt+Up/Alt+Down navigates search history in command mode."""
     import subprocess
