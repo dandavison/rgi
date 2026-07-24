@@ -245,6 +245,7 @@ def test_helper_scripts_packaged():
         "open-in-editor",
         "rgi-copy-command",
         "rgi-abbrev-home",
+        "rgi-vscode-open",
     ]
     scripts_dir = get_rgi_scripts_dir()
 
@@ -344,3 +345,54 @@ def test_rgi_cli_entry_point():
     rgi_path = shutil.which("rgi")
     if rgi_path:
         assert os.path.isfile(rgi_path), f"rgi entry point at {rgi_path} is not a file"
+
+
+def test_rgi_vscode_open_posts_json_boolean_focus(scripts_in_path, tmp_path, monkeypatch):
+    """Test: rgi-vscode-open POSTs {"file", "line", "focus"} to the RPC server.
+
+    The vscode-etc extension validates the payload strictly: `focus` must be a
+    JSON boolean (true/false), not 0/1. This test runs the script against a
+    capturing HTTP server exactly as fzf would invoke it.
+    """
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    received = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", 0))
+            received.append(json.loads(self.rfile.read(length).decode()))
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setenv("RGI_VSCODE_PORT", str(server.server_address[1]))
+
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("Line 1\nLine 2\n")
+
+        for focus_arg, expected in [("0", False), ("1", True)]:
+            result = subprocess.run(
+                ["rgi-vscode-open", str(test_file), "2", focus_arg],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            assert result.returncode == 0, f"rgi-vscode-open failed: {result.stderr}"
+
+        assert len(received) == 2
+        for payload, expected_focus in zip(received, [False, True]):
+            assert payload["file"] == str(test_file)
+            assert payload["line"] == 2
+            assert payload["focus"] is expected_focus, (
+                f"focus must be a JSON boolean, got {payload['focus']!r}"
+            )
+    finally:
+        server.shutdown()

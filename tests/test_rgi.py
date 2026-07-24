@@ -1240,3 +1240,49 @@ def test_ctrl_bracket_toggles_mode(test_fixture_dir, rgi_path):
             timeout=5,
         )
         subprocess.run(tmux_cmd(socket, "kill-server"), capture_output=True, timeout=5)
+
+
+def test_vscode_mode_disables_fzf_preview(monkeypatch, tmp_path):
+    """RGI_VSCODE_PORT disables fzf's own preview; the vscode editor is the preview."""
+    from rgi.cli import build_rgi_fzf_command
+
+    monkeypatch.setenv("RGI_VSCODE_PORT", "7227")
+    monkeypatch.chdir(tmp_path)
+    args = build_rgi_fzf_command("TODO", ["."], "", "")
+
+    assert "--preview" not in args
+    assert "--preview-window" not in args
+
+
+def test_vscode_mode_focus_and_enter_bindings(monkeypatch, tmp_path):
+    """RGI_VSCODE_PORT pushes the selected hit to vscode on cursor move and RET."""
+    from rgi.cli import build_rgi_fzf_command
+
+    monkeypatch.setenv("RGI_VSCODE_PORT", "7227")
+    monkeypatch.chdir(tmp_path)
+    args = build_rgi_fzf_command("TODO", ["."], "", "")
+
+    assert any(
+        arg.startswith("focus:execute-silent(") and "rgi-vscode-open {1} {2} 0" in arg
+        for arg in args
+    ), f"Missing focus binding in: {args}"
+    assert any(
+        arg.startswith("enter:execute-silent(") and "rgi-vscode-open {1} {2} 1" in arg
+        for arg in args
+    ), f"Missing enter binding in: {args}"
+
+
+def test_default_mode_unchanged_without_vscode_port(monkeypatch, tmp_path):
+    """Without RGI_VSCODE_PORT, preview and enter bindings are as before."""
+    from rgi.cli import build_rgi_fzf_command
+
+    monkeypatch.delenv("RGI_VSCODE_PORT", raising=False)
+    monkeypatch.chdir(tmp_path)
+    args = build_rgi_fzf_command("TODO", ["."], "", "")
+
+    assert "--preview" in args
+    assert any(
+        arg.startswith("enter:execute:") and "open-in-editor {1} {2}" in arg
+        for arg in args
+    )
+    assert not any("rgi-vscode-open" in arg for arg in args)

@@ -204,12 +204,18 @@ def build_rgi_fzf_command(
     alt_enter_execute = f"{save_history} open-in-editor {{1}} {{2}} {alt_editor}"
     copy_command = f"{save_history} rgi-copy-command {{q}}"
 
+    # VSCode integration: when RGI_VSCODE_PORT is set (by the vscode-etc
+    # extension), the editor above the terminal acts as the preview, so fzf's
+    # own preview window is disabled and the selected hit is pushed to the
+    # extension's localhost RPC server on every cursor move and on RET.
+    vscode_port = os.environ.get("RGI_VSCODE_PORT", "")
+
     # Configure fzf using the framework
     config = Config(
         disabled=True,
         delimiter=":",
         initial_query=initial_query,
-        preview_command="[[ -n {1} ]] && rgi-preview {1} {2}",
+        preview_command=None if vscode_port else "[[ -n {1} ]] && rgi-preview {1} {2}",
         preview_window="up,70%,~3,noinfo,+{2}-10",
         history_file=history_file,
         footer=initial_footer,
@@ -229,7 +235,19 @@ def build_rgi_fzf_command(
         app.action("result", "ignore", "Skip cursor positioning")
 
     app.action("change", f"transform:{reload_transform}", "Reload on change")
-    app.action("enter", f"execute:{enter_execute}", "Open in editor")
+    if vscode_port:
+        app.action(
+            "focus",
+            "execute-silent([[ -n {1} ]] && rgi-vscode-open {1} {2} 0)",
+            "Preview hit in vscode",
+        )
+        app.action(
+            "enter",
+            f"execute-silent({save_history} rgi-vscode-open {{1}} {{2}} 1)",
+            "Focus hit in vscode",
+        )
+    else:
+        app.action("enter", f"execute:{enter_execute}", "Open in editor")
     app.action("ctrl-o", f"execute:{alt_enter_execute}", f"Open in {alt_editor}")
     app.action("ctrl-c", f"execute({copy_command})+abort", "Copy rg command and exit")
     app.action("ctrl-\\", "transform:rgi-toggle-pinned", "Toggle inline/pinned")

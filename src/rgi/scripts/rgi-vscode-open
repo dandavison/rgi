@@ -1,0 +1,36 @@
+#!/bin/bash
+# Report an rg hit to the vscode-etc extension's RPC server.
+#
+# Invoked by fzf when RGI_VSCODE_PORT is set: on every cursor move (focus=0)
+# and on RET (focus=1). The extension shows the file at the line in the
+# editor above the terminal, taking focus only when focus=1.
+#
+# Usage: rgi-vscode-open <file> <line> [focus]
+
+file="${1/#\~\//$HOME/}"
+line="$2"
+focus="${3:-0}"
+
+# Convert relative path to absolute path (cf. open-in-editor)
+if [[ ! "$file" = /* ]]; then
+    if command -v realpath >/dev/null 2>&1; then
+        file="$(realpath "$file")"
+    else
+        file="$(cd "$(dirname "$file")" 2>/dev/null && pwd)/$(basename "$file")"
+    fi
+fi
+
+# Escape backslashes and double quotes for JSON
+file="${file//\\/\\\\}"
+file="${file//\"/\\\"}"
+
+if [[ "$focus" == "1" ]]; then
+    focus_json=true
+else
+    focus_json=false
+fi
+
+curl -s --max-time 2 -o /dev/null \
+    -X POST "http://127.0.0.1:${RGI_VSCODE_PORT}/open" \
+    -H 'Content-Type: application/json' \
+    -d "{\"file\": \"${file}\", \"line\": ${line:-1}, \"focus\": ${focus_json}}"
