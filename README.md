@@ -1,4 +1,10 @@
-An interactive UI for ripgrep.
+**An interactive UI for ripgrep.**
+
+
+<p align="center">
+  <img src="etc/rgi.png" width=600 alt="rgi UI screenshot" style="border: 1px solid #ccc;" />
+</p>
+
 
 ## Usage
 
